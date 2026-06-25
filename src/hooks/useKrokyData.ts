@@ -22,7 +22,6 @@ export function useKrokyUsers() {
 
 export function useKrokyPayments() {
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
-  const [adminUids, setAdminUids] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,7 +35,6 @@ export function useKrokyPayments() {
           .filter(u => ADMIN_EMAILS.includes(u.email ?? ''))
           .map(u => u.uid)
       );
-      setAdminUids(uids);
       const all = paymentsSnap.docs.map(d => d.data() as PaymentRecord);
       setPayments(all.filter(p => !uids.has(p.uid)));
       setLoading(false);
