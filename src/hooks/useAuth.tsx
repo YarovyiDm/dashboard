@@ -28,7 +28,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async () => {
-    await signInWithPopup(krokyAuth, new GoogleAuthProvider());
+    const result = await signInWithPopup(krokyAuth, new GoogleAuthProvider());
+    if (result.user.email !== 'yarovoy.dmytro@gmail.com') {
+      await signOut(krokyAuth);
+    }
   };
 
   const logout = async () => {
