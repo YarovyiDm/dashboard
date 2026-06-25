@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, LogOut, FileText, Pen, QrCode, Briefcase, BarChart3, Users, ArrowLeft, GraduationCap } from 'lucide-react';
+import { LayoutDashboard, LogOut, FileText, Pen, QrCode, Briefcase, BarChart3, Users, ArrowLeft } from 'lucide-react';
 
 const urokNav = [
   { to: '/urok', label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
