@@ -30,11 +30,11 @@ export function KrokyOverview() {
 
     const ukPayments = approved.filter(p => !p.locale || p.locale === 'uk');
     const plPayments = approved.filter(p => p.locale === 'pl');
+    const enPayments = approved.filter(p => p.locale === 'en');
 
     const countryStats = (list: typeof approved) => ({
       count: list.length,
       revenue: list.reduce((s, p) => s + Number(p.amount || 0), 0),
-      currency: list[0]?.currency || 'UAH',
       buyers: new Set(list.map(p => p.uid)).size,
     });
 
@@ -50,6 +50,7 @@ export function KrokyOverview() {
       conversionRate,
       uk: countryStats(ukPayments),
       pl: countryStats(plPayments),
+      en: countryStats(enPayments),
     };
   }, [users, payments]);
 
@@ -148,7 +149,7 @@ export function KrokyOverview() {
 
       {/* Payments by country */}
       <h2 className="text-lg font-semibold text-text-primary mb-4">Payments by Country</h2>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div className="bg-surface-card border border-border rounded-xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-xl">🇺🇦</span>
@@ -186,6 +187,27 @@ export function KrokyOverview() {
             </div>
             <div>
               <div className="text-lg font-semibold text-text-primary">{stats.pl.buyers}</div>
+              <div className="text-xs text-text-muted">Buyers</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-surface-card border border-border rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-xl">🌍</span>
+            <h3 className="text-lg font-semibold text-text-primary">Rest of World</h3>
+          </div>
+          <div className="flex gap-6">
+            <div>
+              <div className="text-lg font-semibold text-text-primary">{stats.en.revenue} USD</div>
+              <div className="text-xs text-text-muted">Revenue</div>
+            </div>
+            <div>
+              <div className="text-lg font-semibold text-text-primary">{stats.en.count}</div>
+              <div className="text-xs text-text-muted">Payments</div>
+            </div>
+            <div>
+              <div className="text-lg font-semibold text-text-primary">{stats.en.buyers}</div>
               <div className="text-xs text-text-muted">Buyers</div>
             </div>
           </div>

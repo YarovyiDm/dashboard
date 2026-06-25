@@ -98,6 +98,6 @@ export interface PaymentRecord {
   purchasedAt?: string;
   expiresAt?: string;
   trigger?: ConversionTrigger;
-  locale?: 'uk' | 'pl';
-  currency?: 'UAH' | 'PLN';
+  locale?: 'uk' | 'pl' | 'en';
+  currency?: 'UAH' | 'PLN' | 'USD';
 }
