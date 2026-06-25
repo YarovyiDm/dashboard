@@ -11,6 +11,7 @@ import { KrokyEngagement } from './pages/kroky/Engagement';
 import { KrokyUsers } from './pages/kroky/Users';
 import { KrokyUserDetail } from './pages/kroky/UserDetail';
 import { KrokyQR } from './pages/kroky/QR';
+import { UrokOverview } from './pages/urok/Overview';
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth();
@@ -37,6 +38,7 @@ function ProtectedRoutes() {
         <Route path="kroky/engagement" element={<KrokyEngagement />} />
         <Route path="kroky/users" element={<KrokyUsers />} />
         <Route path="kroky/users/:uid" element={<KrokyUserDetail />} />
+        <Route path="urok" element={<UrokOverview />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

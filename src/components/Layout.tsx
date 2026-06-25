@@ -1,6 +1,10 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, LogOut, FileText, Pen, QrCode, Briefcase, BarChart3, Users, ArrowLeft } from 'lucide-react';
+import { LayoutDashboard, LogOut, FileText, Pen, QrCode, Briefcase, BarChart3, Users, ArrowLeft, GraduationCap } from 'lucide-react';
+
+const urokNav = [
+  { to: '/urok', label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
+];
 
 const krokyNav = [
   { to: '/kroky', label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
@@ -16,6 +20,8 @@ export function Layout() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const isKroky = location.pathname.startsWith('/kroky');
+  const isUrok = location.pathname.startsWith('/urok');
+  const activeNav = isKroky ? krokyNav : isUrok ? urokNav : null;
 
   return (
     <div className="flex h-screen">
@@ -28,7 +34,7 @@ export function Layout() {
         </div>
 
         <nav className="flex-1 p-3 space-y-1">
-          {isKroky && (
+          {activeNav && (
             <>
               <Link
                 to="/"
@@ -36,7 +42,7 @@ export function Layout() {
               >
                 <ArrowLeft className="w-3 h-3" /> All Projects
               </Link>
-              {krokyNav.map(item => {
+              {activeNav.map(item => {
                 const active = location.pathname === item.to;
                 return (
                   <Link
