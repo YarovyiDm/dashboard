@@ -2,57 +2,64 @@ import { useMemo } from 'react';
 import { Users, DollarSign, Crown, UserPlus } from 'lucide-react';
 import { StatCard } from '../../components/StatCard';
 import { useKrokyUsers, useKrokyPayments } from '../../hooks/useKrokyData';
+import { useExchangeRates, type Rates } from '../../hooks/useExchangeRates';
+import { paymentNetUah, paymentNetIn, round2, TAX_RATE } from '../../lib/revenue';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export function KrokyOverview() {
   const { users, loading: usersLoading } = useKrokyUsers();
   const { payments, loading: paymentsLoading } = useKrokyPayments();
+  const { rates, loading: ratesLoading } = useExchangeRates();
 
   const stats = useMemo(() => {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     const approved = payments.filter(p => p.status === 'approved');
-    const totalRevenue = approved.reduce((s, p) => s + Number(p.amount || 0), 0);
+    // Net of Creem fees, USD/PLN converted to UAH at the current NBU rate.
+    const totalRevenue = round2(approved.reduce((s, p) => s + paymentNetUah(p, rates), 0));
+    const netProfit = round2(totalRevenue * (1 - TAX_RATE));
     const activePro = users.filter(u => u.isPro && u.proExpiresAt && new Date(u.proExpiresAt) > now).length;
     const newThisWeek = users.filter(u => u.createdAt && new Date(u.createdAt) >= weekAgo).length;
 
     const proPayments = approved.filter(p => p.templateId === 'pro' || p.productType === 'pro');
-    const proRevenue = proPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
     const totalProPurchases = proPayments.length;
     const proBuyers = new Set(proPayments.map(p => p.uid)).size;
     const conversionRate = users.length > 0
       ? ((proBuyers / users.length) * 100).toFixed(1)
       : '0';
 
-    const legacyPayments = approved.filter(p => p.templateId !== 'pro' && p.productType !== 'pro' && p.templateId !== 'sig_oneTime' && p.productType !== 'signature_one_time');
-    const legacyRevenue = legacyPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
-
     const ukPayments = approved.filter(p => !p.locale || p.locale === 'uk');
     const plPayments = approved.filter(p => p.locale === 'pl');
     const enPayments = approved.filter(p => p.locale === 'en');
 
-    const countryStats = (list: typeof approved) => ({
-      count: list.length,
-      revenue: list.reduce((s, p) => s + Number(p.amount || 0), 0),
-      buyers: new Set(list.map(p => p.uid)).size,
-    });
+    // Revenue shown in each block's own currency, net of Creem fees.
+    // After-tax is always reported in UAH.
+    const countryStats = (list: typeof approved, currency: keyof Rates) => {
+      const revenue = round2(list.reduce((s, p) => s + paymentNetIn(p, currency, rates), 0));
+      const revenueUah = list.reduce((s, p) => s + paymentNetUah(p, rates), 0);
+      return {
+        count: list.length,
+        revenue,
+        afterTaxUah: round2(revenueUah * (1 - TAX_RATE)),
+        buyers: new Set(list.map(p => p.uid)).size,
+      };
+    };
 
     return {
       totalUsers: users.length,
       totalRevenue,
+      netProfit,
       activePro,
       newThisWeek,
-      proRevenue,
-      legacyRevenue,
       totalProPurchases,
       proBuyers,
       conversionRate,
-      uk: countryStats(ukPayments),
-      pl: countryStats(plPayments),
-      en: countryStats(enPayments),
+      uk: countryStats(ukPayments, 'UAH'),
+      pl: countryStats(plPayments, 'USD'),
+      en: countryStats(enPayments, 'USD'),
     };
-  }, [users, payments]);
+  }, [users, payments, rates]);
 
   const chartData = useMemo(() => {
     const days: Record<string, number> = {};
@@ -70,7 +77,7 @@ export function KrokyOverview() {
     return Object.entries(days).map(([date, count]) => ({ date: date.slice(5), count }));
   }, [users]);
 
-  if (usersLoading || paymentsLoading) {
+  if (usersLoading || paymentsLoading || ratesLoading) {
     return <div className="text-text-muted">Loading...</div>;
   }
 
@@ -79,11 +86,35 @@ export function KrokyOverview() {
       <h1 className="text-2xl font-bold text-text-primary mb-6">Kroky Overview</h1>
 
       {/* Summary */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-3 gap-4 mb-4">
         <StatCard label="Total Users" value={stats.totalUsers} icon={<Users className="w-5 h-5" />} />
-        <StatCard label="Revenue" value={`${stats.totalRevenue} UAH`} icon={<DollarSign className="w-5 h-5" />} />
         <StatCard label="Active Pro" value={stats.activePro} icon={<Crown className="w-5 h-5" />} />
         <StatCard label="New this week" value={stats.newThisWeek} icon={<UserPlus className="w-5 h-5" />} />
+      </div>
+
+      {/* Revenue */}
+      <div className="grid grid-cols-2 gap-4 mb-8">
+        <div className="bg-surface-card border border-border rounded-xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-text-secondary text-sm">Total Revenue</span>
+            <span className="text-text-muted"><DollarSign className="w-5 h-5" /></span>
+          </div>
+          <div className="text-2xl font-semibold text-text-primary">
+            {Math.round(stats.totalRevenue).toLocaleString()} UAH
+          </div>
+          <div className="mt-2 text-xs text-text-muted">
+            Net of Creem fees · USD→UAH @ {rates.USD.toFixed(2)} (NBU)
+          </div>
+        </div>
+        <div className="bg-surface-card border border-border rounded-xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-text-secondary text-sm">Net Profit</span>
+          </div>
+          <div className="text-2xl font-semibold text-green">
+            {Math.round(stats.netProfit).toLocaleString()} UAH
+          </div>
+          <div className="mt-2 text-xs text-text-muted">After 5% tax</div>
+        </div>
       </div>
 
       {/* Registrations chart */}
@@ -107,49 +138,9 @@ export function KrokyOverview() {
         </ResponsiveContainer>
       </div>
 
-      {/* Revenue breakdown */}
-      <div className="bg-surface-card border border-border rounded-xl p-5 mb-8">
-        <h2 className="text-sm text-text-secondary mb-3">Revenue Breakdown</h2>
-        <div className="flex gap-8">
-          <div>
-            <div className="text-lg font-semibold text-text-primary">{stats.proRevenue} UAH</div>
-            <div className="text-xs text-text-muted">Pro subscriptions</div>
-          </div>
-          {stats.legacyRevenue > 0 && (
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.legacyRevenue} UAH</div>
-              <div className="text-xs text-text-muted">Legacy (templates/signatures)</div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* User → Pro conversion */}
-      <div className="bg-surface-card border border-border rounded-xl p-5 mb-8">
-        <h2 className="text-sm text-text-secondary mb-3">User → Pro Conversion</h2>
-        <div className="flex gap-8">
-          <div>
-            <div className="text-lg font-semibold text-text-primary">{stats.totalUsers}</div>
-            <div className="text-xs text-text-muted">Total users</div>
-          </div>
-          <div>
-            <div className="text-lg font-semibold text-text-primary">{stats.proBuyers}</div>
-            <div className="text-xs text-text-muted">Pro buyers</div>
-          </div>
-          <div>
-            <div className="text-lg font-semibold text-text-primary">{stats.totalProPurchases}</div>
-            <div className="text-xs text-text-muted">Pro purchases</div>
-          </div>
-          <div>
-            <div className="text-lg font-semibold text-accent">{stats.conversionRate}%</div>
-            <div className="text-xs text-text-muted">Conversion rate</div>
-          </div>
-        </div>
-      </div>
-
       {/* Payments by country */}
       <h2 className="text-lg font-semibold text-text-primary mb-4">Payments by Country</h2>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-4 mb-8">
         <div className="bg-surface-card border border-border rounded-xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-xl">🇺🇦</span>
@@ -159,6 +150,10 @@ export function KrokyOverview() {
             <div>
               <div className="text-lg font-semibold text-text-primary">{stats.uk.revenue} UAH</div>
               <div className="text-xs text-text-muted">Revenue</div>
+            </div>
+            <div>
+              <div className="text-lg font-semibold text-green">{stats.uk.afterTaxUah} UAH</div>
+              <div className="text-xs text-text-muted">After 5% tax</div>
             </div>
             <div>
               <div className="text-lg font-semibold text-text-primary">{stats.uk.count}</div>
@@ -178,8 +173,12 @@ export function KrokyOverview() {
           </div>
           <div className="flex gap-6">
             <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.pl.revenue} PLN</div>
+              <div className="text-lg font-semibold text-text-primary">{stats.pl.revenue} USD</div>
               <div className="text-xs text-text-muted">Revenue</div>
+            </div>
+            <div>
+              <div className="text-lg font-semibold text-green">{stats.pl.afterTaxUah} UAH</div>
+              <div className="text-xs text-text-muted">After 5% tax</div>
             </div>
             <div>
               <div className="text-lg font-semibold text-text-primary">{stats.pl.count}</div>
@@ -203,6 +202,10 @@ export function KrokyOverview() {
               <div className="text-xs text-text-muted">Revenue</div>
             </div>
             <div>
+              <div className="text-lg font-semibold text-green">{stats.en.afterTaxUah} UAH</div>
+              <div className="text-xs text-text-muted">After 5% tax</div>
+            </div>
+            <div>
               <div className="text-lg font-semibold text-text-primary">{stats.en.count}</div>
               <div className="text-xs text-text-muted">Payments</div>
             </div>
@@ -210,6 +213,29 @@ export function KrokyOverview() {
               <div className="text-lg font-semibold text-text-primary">{stats.en.buyers}</div>
               <div className="text-xs text-text-muted">Buyers</div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* User → Pro conversion */}
+      <div className="bg-surface-card border border-border rounded-xl p-5 mb-8">
+        <h2 className="text-sm text-text-secondary mb-3">User → Pro Conversion</h2>
+        <div className="flex gap-8">
+          <div>
+            <div className="text-lg font-semibold text-text-primary">{stats.totalUsers}</div>
+            <div className="text-xs text-text-muted">Total users</div>
+          </div>
+          <div>
+            <div className="text-lg font-semibold text-text-primary">{stats.proBuyers}</div>
+            <div className="text-xs text-text-muted">Pro buyers</div>
+          </div>
+          <div>
+            <div className="text-lg font-semibold text-text-primary">{stats.totalProPurchases}</div>
+            <div className="text-xs text-text-muted">Pro purchases</div>
+          </div>
+          <div>
+            <div className="text-lg font-semibold text-accent">{stats.conversionRate}%</div>
+            <div className="text-xs text-text-muted">Conversion rate</div>
           </div>
         </div>
       </div>
