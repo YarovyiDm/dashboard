@@ -3,7 +3,7 @@ import { collection, getDocs, query } from 'firebase/firestore';
 import { krokyDb } from '../lib/firebase';
 import type { UserProfile, PaymentRecord } from '../types';
 
-const ADMIN_EMAILS = ['yarovoy.dmytro@gmail.com', 'dmytro.poplinski@gmail.com', 'dm.romaniuk2323@gmail.com'];
+const ADMIN_EMAILS = ['yarovoy.dmytro@gmail.com', 'dmytro.poplinski@gmail.com', 'dm.romaniuk2323@gmail.com', 'd.yarovyi@goodevas.com'];
 
 export function useKrokyUsers() {
   const [users, setUsers] = useState<UserProfile[]>([]);

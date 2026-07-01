@@ -29,6 +29,25 @@ export function KrokyOverview() {
       ? ((proBuyers / users.length) * 100).toFixed(1)
       : '0';
 
+    // Pro buyers whose first purchase came more than a week after they registered
+    // (counts every Pro buyer, active or not).
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    const userByUid = new Map(users.map(u => [u.uid, u]));
+    const firstProAt = new Map<string, number>();
+    proPayments.forEach(p => {
+      const t = new Date(p.purchasedAt || p.createdAt).getTime();
+      const prev = firstProAt.get(p.uid);
+      if (prev === undefined || t < prev) firstProAt.set(p.uid, t);
+    });
+    const slowConverterEmails: string[] = [];
+    firstProAt.forEach((purchasedAt, uid) => {
+      const u = userByUid.get(uid);
+      if (!u || !u.createdAt) return;
+      if (purchasedAt - new Date(u.createdAt).getTime() > WEEK_MS) {
+        slowConverterEmails.push(u.email || uid);
+      }
+    });
+
     const ukPayments = approved.filter(p => !p.locale || p.locale === 'uk');
     const plPayments = approved.filter(p => p.locale === 'pl');
     const enPayments = approved.filter(p => p.locale === 'en');
@@ -54,6 +73,8 @@ export function KrokyOverview() {
       newThisWeek,
       totalProPurchases,
       proBuyers,
+      slowConverters: slowConverterEmails.length,
+      slowConverterEmails,
       conversionRate,
       uk: countryStats(ukPayments, 'UAH'),
       pl: countryStats(plPayments, 'USD'),
@@ -236,6 +257,18 @@ export function KrokyOverview() {
           <div>
             <div className="text-lg font-semibold text-accent">{stats.conversionRate}%</div>
             <div className="text-xs text-text-muted">Conversion rate</div>
+          </div>
+          <div className="relative group">
+            <div className="text-lg font-semibold text-text-primary cursor-help">{stats.slowConverters}</div>
+            <div className="text-xs text-text-muted cursor-help">Bought &gt;1 week after signup</div>
+            {stats.slowConverterEmails.length > 0 && (
+              <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10 bg-surface-hover border border-border rounded-lg p-3 shadow-lg max-h-64 overflow-auto">
+                <div className="text-xs text-text-muted mb-1">Users ({stats.slowConverterEmails.length})</div>
+                {stats.slowConverterEmails.map(email => (
+                  <div key={email} className="text-xs text-text-primary whitespace-nowrap">{email}</div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
