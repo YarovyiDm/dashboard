@@ -107,14 +107,14 @@ export function KrokyOverview() {
       <h1 className="text-2xl font-bold text-text-primary mb-6">Kroky Overview</h1>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
         <StatCard label="Total Users" value={stats.totalUsers} icon={<Users className="w-5 h-5" />} />
         <StatCard label="Active Pro" value={stats.activePro} icon={<Crown className="w-5 h-5" />} />
         <StatCard label="New this week" value={stats.newThisWeek} icon={<UserPlus className="w-5 h-5" />} />
       </div>
 
       {/* Revenue */}
-      <div className="grid grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
         <div className="bg-surface-card border border-border rounded-xl p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="text-text-secondary text-sm">Total Revenue</span>
@@ -161,13 +161,13 @@ export function KrokyOverview() {
 
       {/* Payments by country */}
       <h2 className="text-lg font-semibold text-text-primary mb-4">Payments by Country</h2>
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div className="bg-surface-card border border-border rounded-xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-xl">🇺🇦</span>
             <h3 className="text-lg font-semibold text-text-primary">Ukraine</h3>
           </div>
-          <div className="flex gap-6">
+          <div className="flex flex-wrap gap-x-6 gap-y-3">
             <div>
               <div className="text-lg font-semibold text-text-primary">{stats.uk.revenue} UAH</div>
               <div className="text-xs text-text-muted">Revenue</div>
@@ -192,7 +192,7 @@ export function KrokyOverview() {
             <span className="text-xl">🇵🇱</span>
             <h3 className="text-lg font-semibold text-text-primary">Poland</h3>
           </div>
-          <div className="flex gap-6">
+          <div className="flex flex-wrap gap-x-6 gap-y-3">
             <div>
               <div className="text-lg font-semibold text-text-primary">{stats.pl.revenue} USD</div>
               <div className="text-xs text-text-muted">Revenue</div>
@@ -217,7 +217,7 @@ export function KrokyOverview() {
             <span className="text-xl">🌍</span>
             <h3 className="text-lg font-semibold text-text-primary">Rest of World</h3>
           </div>
-          <div className="flex gap-6">
+          <div className="flex flex-wrap gap-x-6 gap-y-3">
             <div>
               <div className="text-lg font-semibold text-text-primary">{stats.en.revenue} USD</div>
               <div className="text-xs text-text-muted">Revenue</div>
@@ -241,7 +241,7 @@ export function KrokyOverview() {
       {/* User → Pro conversion */}
       <div className="bg-surface-card border border-border rounded-xl p-5 mb-8">
         <h2 className="text-sm text-text-secondary mb-3">User → Pro Conversion</h2>
-        <div className="flex gap-8">
+        <div className="flex flex-wrap gap-x-8 gap-y-4">
           <div>
             <div className="text-lg font-semibold text-text-primary">{stats.totalUsers}</div>
             <div className="text-xs text-text-muted">Total users</div>
@@ -262,7 +262,7 @@ export function KrokyOverview() {
             <div className="text-lg font-semibold text-text-primary cursor-help">{stats.slowConverters}</div>
             <div className="text-xs text-text-muted cursor-help">Bought &gt;1 week after signup</div>
             {stats.slowConverterEmails.length > 0 && (
-              <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10 bg-surface-hover border border-border rounded-lg p-3 shadow-lg max-h-64 overflow-auto">
+              <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10 bg-surface-hover border border-border rounded-lg p-3 shadow-lg max-h-64 max-w-[calc(100vw-2rem)] overflow-auto">
                 <div className="text-xs text-text-muted mb-1">Users ({stats.slowConverterEmails.length})</div>
                 {stats.slowConverterEmails.map(email => (
                   <div key={email} className="text-xs text-text-primary whitespace-nowrap">{email}</div>

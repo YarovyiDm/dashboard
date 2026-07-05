@@ -53,13 +53,13 @@ export function KrokySignature() {
     <div>
       <h1 className="text-2xl font-bold text-text-primary mb-6">Signature Analytics</h1>
 
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
         <StatCard label="Editor Opens" value={data.totalOpens} icon={<MousePointerClick className="w-5 h-5" />} />
         <StatCard label="Editor Users" value={data.editorUsers} icon={<Eye className="w-5 h-5" />} />
         <StatCard label="Total Copies" value={data.totalCopies} icon={<Copy className="w-5 h-5" />} />
       </div>
       {(data.legacyPurchased > 0 || data.templatePurchaseCount > 0 || data.revenue > 0) && (
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
           {data.legacyPurchased > 0 && (
             <StatCard label="Full Access (legacy)" value={data.legacyPurchased} icon={<Pen className="w-5 h-5" />} />
           )}

@@ -36,13 +36,13 @@ export function KrokyTracker() {
     <div>
       <h1 className="text-2xl font-bold text-text-primary mb-6">Job Tracker Analytics</h1>
 
-      <div className="grid grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <StatCard label="Tracker Users" value={data.trackerUsers} icon={<Users className="w-5 h-5" />} />
         <StatCard label="Tracker Opens" value={data.totalOpens} icon={<MousePointerClick className="w-5 h-5" />} />
         <StatCard label="Applications Created" value={data.totalApplications} icon={<FilePlus className="w-5 h-5" />} />
         <StatCard label="Avg Apps / User" value={data.avgAppsPerUser} icon={<Briefcase className="w-5 h-5" />} />
       </div>
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard label="Limit Reached (5/5)" value={data.totalLimitReached} icon={<AlertTriangle className="w-5 h-5" />} />
       </div>
 

@@ -5,7 +5,7 @@ export function Login() {
   const { login } = useAuth();
 
   return (
-    <div className="flex items-center justify-center h-screen bg-surface">
+    <div className="flex items-center justify-center h-screen bg-surface px-4">
       <div className="text-center">
         <h1 className="text-3xl font-bold text-text-primary mb-2">Dashboard</h1>
         <p className="text-text-secondary mb-8">Sign in to view your projects</p>

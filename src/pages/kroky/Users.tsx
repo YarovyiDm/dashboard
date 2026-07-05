@@ -86,12 +86,12 @@ export function KrokyUsers() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-text-primary flex items-center gap-3">
           <UsersIcon className="w-6 h-6" /> Users
           <span className="text-base font-normal text-text-muted">({users.length})</span>
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex bg-surface border border-border rounded-lg p-0.5">
             {(['all', 'pro', 'non-pro'] as ProFilter[]).map(f => (
               <button
@@ -112,13 +112,13 @@ export function KrokyUsers() {
             placeholder="Search by name, email..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted w-64 focus:outline-none focus:border-accent"
+            className="bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted w-full sm:w-64 focus:outline-none focus:border-accent"
           />
         </div>
       </div>
 
-      <div className="bg-surface-card border border-border rounded-xl overflow-hidden">
-        <table className="w-full">
+      <div className="bg-surface-card border border-border rounded-xl overflow-x-auto">
+        <table className="w-full min-w-[720px]">
           <thead>
             <tr className="border-b border-border text-left">
               <th className="px-4 py-3 text-xs font-medium text-text-muted">User</th>

@@ -105,7 +105,7 @@ export function KrokyResume() {
     <div>
       <h1 className="text-2xl font-bold text-text-primary mb-6">Resume Analytics</h1>
 
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard label="Watermarked exports" value={data.watermarkedExports} icon={<Download className="w-5 h-5" />} />
         <StatCard label="Clean exports (Pro)" value={data.cleanExports} icon={<Download className="w-5 h-5" />} />
         {data.totalPurchased > 0 && (
@@ -140,7 +140,7 @@ export function KrokyResume() {
 
       {/* Theme insights */}
       {data.themeUsageData.length > 0 && (
-        <div className="grid grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
           <div className="bg-surface-card border border-border rounded-xl p-5">
             <h2 className="text-sm text-text-secondary mb-4 flex items-center justify-between">
               <span className="flex items-center gap-2">

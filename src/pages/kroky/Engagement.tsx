@@ -85,14 +85,14 @@ export function KrokyEngagement() {
     <div>
       <h1 className="text-2xl font-bold text-text-primary mb-6">Engagement & Acquisition</h1>
 
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard label="Total Users" value={users.length} icon={<Users className="w-5 h-5" />} />
         <StatCard label="Total Visits" value={data.totalVisits} icon={<Briefcase className="w-5 h-5" />} />
         <StatCard label="Paywall Views" value={data.paywallViews} icon={<Eye className="w-5 h-5" />} />
         <StatCard label="Avg Time (min)" value={data.avgTimeMin} icon={<Clock className="w-5 h-5" />} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         {/* Device distribution */}
         <div className="bg-surface-card border border-border rounded-xl p-5">
           <h2 className="text-sm text-text-secondary mb-4">Device Distribution</h2>

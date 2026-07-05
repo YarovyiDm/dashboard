@@ -45,7 +45,7 @@ export function UrokOverview() {
     <div>
       <h1 className="text-2xl font-bold text-text-primary mb-6">Urok Overview</h1>
 
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         <StatCard label="Total Users" value={stats.totalUsers} icon={<Users className="w-5 h-5" />} />
         <StatCard label="Pro Users" value={stats.proUsers} icon={<Crown className="w-5 h-5" />} />
         <StatCard label="New this week" value={stats.newThisWeek} icon={<UserPlus className="w-5 h-5" />} />

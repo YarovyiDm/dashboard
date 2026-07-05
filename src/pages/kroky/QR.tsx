@@ -38,7 +38,7 @@ export function KrokyQR() {
     <div>
       <h1 className="text-2xl font-bold text-text-primary mb-6">QR Code Analytics</h1>
 
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard label="Editor Opens" value={data.totalOpens} icon={<MousePointerClick className="w-5 h-5" />} />
         <StatCard label="Editor Users" value={data.editorUsers} icon={<Users className="w-5 h-5" />} />
         <StatCard label="Downloads" value={data.totalDownloads} icon={<Download className="w-5 h-5" />} />
