@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { PullToRefresh } from './PullToRefresh';
 import { LayoutDashboard, LogOut, FileText, Pen, QrCode, Briefcase, BarChart3, Users, ArrowLeft, Menu, X } from 'lucide-react';
 
 const urokNav = [
@@ -29,7 +30,7 @@ export function Layout() {
   useEffect(() => { setOpen(false); }, [location.pathname]);
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-full overflow-hidden">
       {/* Mobile top bar */}
       <header className="lg:hidden fixed top-0 inset-x-0 z-30 h-14 bg-surface-card border-b border-border flex items-center gap-3 px-4">
         <button onClick={() => setOpen(true)} className="text-text-secondary hover:text-text-primary" aria-label="Open menu">
@@ -104,8 +105,10 @@ export function Layout() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto p-4 pt-18 sm:p-6 lg:p-8 lg:pt-8">
-        <Outlet />
+      <main className="flex-1 overflow-hidden">
+        <PullToRefresh className="h-full overflow-y-auto overscroll-y-contain p-4 pt-18 sm:p-6 lg:p-8 lg:pt-8">
+          <Outlet />
+        </PullToRefresh>
       </main>
     </div>
   );

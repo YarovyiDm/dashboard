@@ -18,7 +18,7 @@ function ProtectedRoutes() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-surface">
+      <div className="flex items-center justify-center h-full bg-surface">
         <div className="text-text-muted">Loading...</div>
       </div>
     );

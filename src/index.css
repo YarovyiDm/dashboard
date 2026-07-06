@@ -16,8 +16,18 @@
   --color-blue: #3b82f6;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
+  /* The app shell owns scrolling (a single <main> scroll area), so the
+     document itself must not scroll — avoids the mobile double-scrollbar. */
+  overflow: hidden;
+  overscroll-behavior: none;
   background-color: var(--color-surface);
   color: var(--color-text-primary);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
