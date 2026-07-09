@@ -3,6 +3,7 @@ import { Download, FileText, DollarSign, Star, Globe, Palette } from 'lucide-rea
 import { StatCard } from '../../components/StatCard';
 import { useKrokyUsers, useKrokyPayments } from '../../hooks/useKrokyData';
 import { getWatermarkedExports, getCleanExports, ALL_LANGS, LANG_LABELS } from '../../lib/krokyFields';
+import { toDayMonthYear } from '../../lib/date';
 import type { ExportLang } from '../../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
@@ -206,7 +207,7 @@ export function KrokyResume() {
                 <div key={p.orderReference} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                   <div>
                     <span className="text-text-primary text-sm">{TEMPLATE_NAMES[p.templateId] || p.templateId}</span>
-                    <span className="text-text-muted text-xs ml-3">{p.createdAt?.slice(0, 10)}</span>
+                    <span className="text-text-muted text-xs ml-3">{toDayMonthYear(p.createdAt)}</span>
                   </div>
                   <span className="text-green text-sm font-medium">{p.amount} UAH</span>
                 </div>

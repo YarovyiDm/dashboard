@@ -4,6 +4,7 @@ import { StatCard } from '../../components/StatCard';
 import { useKrokyUsers, useKrokyPayments } from '../../hooks/useKrokyData';
 import { useExchangeRates, type Rates } from '../../hooks/useExchangeRates';
 import { paymentNetUah, paymentNetIn, round2, TAX_RATE } from '../../lib/revenue';
+import { toDayMonth, toDayMonthYear } from '../../lib/date';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export function KrokyOverview() {
@@ -48,6 +49,18 @@ export function KrokyOverview() {
       }
     });
 
+    // Busiest single day by number of Pro purchases.
+    const purchasesByDay = new Map<string, number>();
+    proPayments.forEach(p => {
+      const day = (p.purchasedAt || p.createdAt || '').slice(0, 10);
+      if (day) purchasesByDay.set(day, (purchasesByDay.get(day) || 0) + 1);
+    });
+    let peakDay = '';
+    let peakPurchases = 0;
+    purchasesByDay.forEach((count, day) => {
+      if (count > peakPurchases) { peakPurchases = count; peakDay = day; }
+    });
+
     const ukPayments = approved.filter(p => !p.locale || p.locale === 'uk');
     const plPayments = approved.filter(p => p.locale === 'pl');
     const enPayments = approved.filter(p => p.locale === 'en');
@@ -75,6 +88,8 @@ export function KrokyOverview() {
       proBuyers,
       slowConverters: slowConverterEmails.length,
       slowConverterEmails,
+      peakPurchases,
+      peakDay,
       conversionRate,
       uk: countryStats(ukPayments, 'UAH'),
       pl: countryStats(plPayments, 'USD'),
@@ -95,7 +110,7 @@ export function KrokyOverview() {
         if (day in days) days[day]++;
       }
     });
-    return Object.entries(days).map(([date, count]) => ({ date: date.slice(5), count }));
+    return Object.entries(days).map(([date, count]) => ({ date: toDayMonth(date), count }));
   }, [users]);
 
   if (usersLoading || paymentsLoading || ratesLoading) {
@@ -269,6 +284,12 @@ export function KrokyOverview() {
                 ))}
               </div>
             )}
+          </div>
+          <div title={stats.peakDay ? `on ${toDayMonthYear(stats.peakDay)}` : undefined}>
+            <div className="text-lg font-semibold text-text-primary">{stats.peakPurchases}</div>
+            <div className="text-xs text-text-muted">
+              Most purchases / day{stats.peakDay ? ` (${toDayMonth(stats.peakDay)})` : ''}
+            </div>
           </div>
         </div>
       </div>

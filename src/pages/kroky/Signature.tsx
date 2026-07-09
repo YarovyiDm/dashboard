@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Pen, DollarSign, Copy, MousePointerClick, ShoppingBag, Eye } from 'lucide-react';
 import { StatCard } from '../../components/StatCard';
 import { useKrokyUsers, useKrokyPayments } from '../../hooks/useKrokyData';
+import { toDayMonthYear } from '../../lib/date';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const TEMPLATE_NAMES: Record<string, string> = {
@@ -115,7 +116,7 @@ export function KrokySignature() {
                   <div>
                     <span className="text-text-primary text-sm">Signature</span>
                     <span className="text-text-muted text-xs ml-3">{p.uid?.slice(0, 8)}...</span>
-                    <span className="text-text-muted text-xs ml-3">{p.createdAt?.slice(0, 10)}</span>
+                    <span className="text-text-muted text-xs ml-3">{toDayMonthYear(p.createdAt)}</span>
                   </div>
                   <span className="text-green text-sm font-medium">{p.amount} UAH</span>
                 </div>

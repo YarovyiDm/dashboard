@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Users, Crown, UserPlus } from 'lucide-react';
 import { StatCard } from '../../components/StatCard';
 import { useUrokUsers } from '../../hooks/useUrokData';
+import { toDayMonth } from '../../lib/date';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export function UrokOverview() {
@@ -34,7 +35,7 @@ export function UrokOverview() {
         if (day in days) days[day]++;
       }
     });
-    return Object.entries(days).map(([date, count]) => ({ date: date.slice(5), count }));
+    return Object.entries(days).map(([date, count]) => ({ date: toDayMonth(date), count }));
   }, [users]);
 
   if (loading) {
