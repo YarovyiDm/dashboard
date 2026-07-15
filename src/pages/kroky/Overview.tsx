@@ -77,9 +77,19 @@ export function KrokyOverview() {
     const plPayments = approved.filter(p => p.locale === 'pl');
     const enPayments = approved.filter(p => p.locale === 'en');
 
+    // Signups per locale (acquisition.signupLocale). Legacy users without it
+    // fall to UA, mirroring how UA payments treat a missing locale.
+    const regByLocale = { uk: 0, pl: 0, en: 0 };
+    users.forEach(u => {
+      const loc = u.acquisition?.signupLocale;
+      if (loc === 'pl') regByLocale.pl++;
+      else if (loc === 'en') regByLocale.en++;
+      else regByLocale.uk++;
+    });
+
     // Revenue shown in each block's own currency, net of Creem fees.
     // After-tax is always reported in UAH.
-    const countryStats = (list: typeof approved, currency: keyof Rates) => {
+    const countryStats = (list: typeof approved, currency: keyof Rates, registrations: number) => {
       const revenue = round2(list.reduce((s, p) => s + paymentNetIn(p, currency, rates), 0));
       const revenueUah = list.reduce((s, p) => s + paymentNetUah(p, rates), 0);
       return {
@@ -87,6 +97,7 @@ export function KrokyOverview() {
         revenue,
         afterTaxUah: round2(revenueUah * (1 - TAX_RATE)),
         buyers: new Set(list.map(p => p.uid)).size,
+        registrations,
       };
     };
 
@@ -106,9 +117,9 @@ export function KrokyOverview() {
       peakPurchases,
       peakDay,
       conversionRate,
-      uk: countryStats(ukPayments, 'UAH'),
-      pl: countryStats(plPayments, 'USD'),
-      en: countryStats(enPayments, 'USD'),
+      uk: countryStats(ukPayments, 'UAH', regByLocale.uk),
+      pl: countryStats(plPayments, 'USD', regByLocale.pl),
+      en: countryStats(enPayments, 'USD', regByLocale.en),
     };
   }, [users, payments, rates]);
 
@@ -234,8 +245,8 @@ export function KrokyOverview() {
         </ResponsiveContainer>
       </div>
 
-      {/* Payments by country */}
-      <h2 className="text-lg font-semibold text-text-primary mb-4">Payments by Country</h2>
+      {/* By country */}
+      <h2 className="text-lg font-semibold text-text-primary mb-4">By Country</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div className="bg-surface-card border border-border rounded-xl p-5">
           <div className="flex items-center gap-2 mb-4">
@@ -243,6 +254,10 @@ export function KrokyOverview() {
             <h3 className="text-lg font-semibold text-text-primary">Ukraine</h3>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-3">
+            <div>
+              <div className="text-lg font-semibold text-text-primary">{stats.uk.registrations}</div>
+              <div className="text-xs text-text-muted">Registrations</div>
+            </div>
             <div>
               <div className="text-lg font-semibold text-text-primary">{stats.uk.revenue} UAH</div>
               <div className="text-xs text-text-muted">Revenue</div>
@@ -269,6 +284,10 @@ export function KrokyOverview() {
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-3">
             <div>
+              <div className="text-lg font-semibold text-text-primary">{stats.pl.registrations}</div>
+              <div className="text-xs text-text-muted">Registrations</div>
+            </div>
+            <div>
               <div className="text-lg font-semibold text-text-primary">{stats.pl.revenue} USD</div>
               <div className="text-xs text-text-muted">Revenue</div>
             </div>
@@ -293,6 +312,10 @@ export function KrokyOverview() {
             <h3 className="text-lg font-semibold text-text-primary">Rest of World</h3>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-3">
+            <div>
+              <div className="text-lg font-semibold text-text-primary">{stats.en.registrations}</div>
+              <div className="text-xs text-text-muted">Registrations</div>
+            </div>
             <div>
               <div className="text-lg font-semibold text-text-primary">{stats.en.revenue} USD</div>
               <div className="text-xs text-text-muted">Revenue</div>

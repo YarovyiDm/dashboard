@@ -80,6 +80,8 @@ export interface UserProfile {
     utmMedium?: string;
     utmCampaign?: string;
     deviceType: 'mobile' | 'tablet' | 'desktop';
+    // Locale chosen at signup (added later; undefined on legacy users).
+    signupLocale?: 'uk' | 'pl' | 'en';
   };
 }
 

@@ -6,6 +6,7 @@ import { getProPurchaseDate, getTotalExports } from '../../lib/krokyFields';
 import type { UserProfile } from '../../types';
 
 type ProFilter = 'all' | 'pro' | 'non-pro';
+type LocaleFilter = 'all' | 'uk' | 'pl' | 'en';
 type SortField = 'registered' | 'visits' | 'exports';
 type SortDir = 'asc' | 'desc';
 const PAGE_SIZE = 10;
@@ -33,6 +34,7 @@ export function KrokyUsers() {
   const { users, loading } = useKrokyUsers();
   const [search, setSearch] = useState('');
   const [proFilter, setProFilter] = useState<ProFilter>('all');
+  const [localeFilter, setLocaleFilter] = useState<LocaleFilter>('all');
   const [sortField, setSortField] = useState<SortField>('registered');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [page, setPage] = useState(1);
@@ -72,10 +74,17 @@ export function KrokyUsers() {
         return proFilter === 'pro' ? active : !active;
       });
     }
+    if (localeFilter !== 'all') {
+      list = list.filter(u => {
+        const loc = u.acquisition?.signupLocale;
+        // Legacy users without a signupLocale are treated as Ukrainian.
+        return localeFilter === 'uk' ? (loc === 'uk' || !loc) : loc === localeFilter;
+      });
+    }
     return list;
-  }, [users, search, proFilter, sortField, sortDir]);
+  }, [users, search, proFilter, localeFilter, sortField, sortDir]);
 
-  useEffect(() => { setPage(1); }, [search, proFilter, sortField, sortDir]);
+  useEffect(() => { setPage(1); }, [search, proFilter, localeFilter, sortField, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -104,6 +113,21 @@ export function KrokyUsers() {
                 }`}
               >
                 {f === 'all' ? 'All' : f === 'pro' ? 'Pro' : 'Non-Pro'}
+              </button>
+            ))}
+          </div>
+          <div className="flex bg-surface border border-border rounded-lg p-0.5">
+            {(['all', 'uk', 'pl', 'en'] as LocaleFilter[]).map(f => (
+              <button
+                key={f}
+                onClick={() => setLocaleFilter(f)}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                  localeFilter === f
+                    ? 'bg-accent/15 text-accent'
+                    : 'text-text-muted hover:text-text-primary'
+                }`}
+              >
+                {f === 'all' ? 'All' : f === 'uk' ? 'UA' : f.toUpperCase()}
               </button>
             ))}
           </div>
