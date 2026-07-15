@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 import { Users, Crown, UserPlus } from 'lucide-react';
 import { StatCard } from '../../components/StatCard';
-import { useUrokUsers } from '../../hooks/useUrokData';
+import { useKmetaUsers } from '../../hooks/useKmetaData';
 import { toDayMonth } from '../../lib/date';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
-export function UrokOverview() {
-  const { users, loading } = useUrokUsers();
+export function KmetaOverview() {
+  const { users, loading } = useKmetaUsers();
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -44,7 +44,7 @@ export function UrokOverview() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-text-primary mb-6">Urok Overview</h1>
+      <h1 className="text-2xl font-bold text-text-primary mb-6">Kmeta Overview</h1>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         <StatCard label="Total Users" value={stats.totalUsers} icon={<Users className="w-5 h-5" />} />
@@ -57,7 +57,7 @@ export function UrokOverview() {
         <ResponsiveContainer width="100%" height={200}>
           <AreaChart data={chartData}>
             <defs>
-              <linearGradient id="colorCountUrok" x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id="colorCountKmeta" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
                 <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
               </linearGradient>
@@ -67,7 +67,7 @@ export function UrokOverview() {
             <Tooltip
               contentStyle={{ background: '#1a1d27', border: '1px solid #2a2e3a', borderRadius: 8, color: '#f1f5f9' }}
             />
-            <Area type="monotone" dataKey="count" stroke="#6366f1" fill="url(#colorCountUrok)" strokeWidth={2} />
+            <Area type="monotone" dataKey="count" stroke="#6366f1" fill="url(#colorCountKmeta)" strokeWidth={2} />
           </AreaChart>
         </ResponsiveContainer>
       </div>

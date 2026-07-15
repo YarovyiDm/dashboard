@@ -14,13 +14,13 @@ const krokyApp = existingKroky || initializeApp(krokyConfig, 'kroky');
 export const krokyDb = getFirestore(krokyApp);
 export const krokyAuth = getAuth(krokyApp);
 
-const urokConfig = {
-  apiKey: import.meta.env.VITE_UROK_API_KEY,
-  authDomain: import.meta.env.VITE_UROK_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_UROK_PROJECT_ID,
+const kmetaConfig = {
+  apiKey: import.meta.env.VITE_KMETA_API_KEY,
+  authDomain: import.meta.env.VITE_KMETA_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_KMETA_PROJECT_ID,
 };
 
-const existingUrok = getApps().find(a => a.name === 'urok');
-const urokApp = existingUrok || initializeApp(urokConfig, 'urok');
+const existingKmeta = getApps().find(a => a.name === 'kmeta');
+const kmetaApp = existingKmeta || initializeApp(kmetaConfig, 'kmeta');
 
-export const urokDb = getFirestore(urokApp);
+export const kmetaDb = getFirestore(kmetaApp);

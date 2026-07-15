@@ -32,9 +32,9 @@ jobs:
           VITE_KROKY_API_KEY: ${{ secrets.VITE_KROKY_API_KEY }}
           VITE_KROKY_AUTH_DOMAIN: ${{ secrets.VITE_KROKY_AUTH_DOMAIN }}
           VITE_KROKY_PROJECT_ID: ${{ secrets.VITE_KROKY_PROJECT_ID }}
-          VITE_UROK_API_KEY: ${{ secrets.VITE_UROK_API_KEY }}
-          VITE_UROK_AUTH_DOMAIN: ${{ secrets.VITE_UROK_AUTH_DOMAIN }}
-          VITE_UROK_PROJECT_ID: ${{ secrets.VITE_UROK_PROJECT_ID }}
+          VITE_KMETA_API_KEY: ${{ secrets.VITE_KMETA_API_KEY }}
+          VITE_KMETA_AUTH_DOMAIN: ${{ secrets.VITE_KMETA_AUTH_DOMAIN }}
+          VITE_KMETA_PROJECT_ID: ${{ secrets.VITE_KMETA_PROJECT_ID }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -4,8 +4,8 @@ import { useAuth } from '../hooks/useAuth';
 import { PullToRefresh } from './PullToRefresh';
 import { LayoutDashboard, LogOut, FileText, Pen, QrCode, Briefcase, BarChart3, Users, ArrowLeft, Menu, X } from 'lucide-react';
 
-const urokNav = [
-  { to: '/urok', label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
+const kmetaNav = [
+  { to: '/kmeta', label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
 ];
 
 const krokyNav = [
@@ -23,8 +23,8 @@ export function Layout() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const isKroky = location.pathname.startsWith('/kroky');
-  const isUrok = location.pathname.startsWith('/urok');
-  const activeNav = isKroky ? krokyNav : isUrok ? urokNav : null;
+  const isKmeta = location.pathname.startsWith('/kmeta');
+  const activeNav = isKroky ? krokyNav : isKmeta ? kmetaNav : null;
 
   // Close the mobile drawer whenever the route changes.
   useEffect(() => { setOpen(false); }, [location.pathname]);

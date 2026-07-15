@@ -1,11 +1,11 @@
 import { ProjectCard } from '../components/ProjectCard';
 import { useKrokyUsers, useKrokyPayments } from '../hooks/useKrokyData';
-import { useUrokUsers } from '../hooks/useUrokData';
+import { useKmetaUsers } from '../hooks/useKmetaData';
 
 export function Home() {
   const { users } = useKrokyUsers();
   const { payments } = useKrokyPayments();
-  const { users: urokUsers } = useUrokUsers();
+  const { users: kmetaUsers } = useKmetaUsers();
 
   const approved = payments.filter(p => p.status === 'approved');
   const totalRevenue = approved.reduce((sum, p) => sum + Number(p.amount || 0), 0);
@@ -26,12 +26,12 @@ export function Home() {
           ]}
         />
         <ProjectCard
-          id="urok"
-          name="Urok"
+          id="kmeta"
+          name="Kmeta"
           description="Platform for tutors"
           stats={[
-            { label: 'Users', value: urokUsers.length },
-            { label: 'Pro', value: urokUsers.filter(u => u.plan === 'pro').length },
+            { label: 'Users', value: kmetaUsers.length },
+            { label: 'Pro', value: kmetaUsers.filter(u => u.plan === 'pro').length },
           ]}
         />
       </div>

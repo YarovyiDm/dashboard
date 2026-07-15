@@ -23,6 +23,18 @@ export function KrokyOverview() {
     const activePro = users.filter(u => u.isPro && u.proExpiresAt && new Date(u.proExpiresAt) > now).length;
     const newThisWeek = users.filter(u => u.createdAt && new Date(u.createdAt) >= weekAgo).length;
 
+    // Week-over-week growth of new signups: this week vs the 7 days before it.
+    const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+    const newLastWeek = users.filter(u => {
+      if (!u.createdAt) return false;
+      const t = new Date(u.createdAt);
+      return t >= twoWeeksAgo && t < weekAgo;
+    }).length;
+    const weekDelta = newThisWeek - newLastWeek;
+    const weekTrendPct = newLastWeek === 0
+      ? (newThisWeek > 0 ? 100 : 0)
+      : Math.round((weekDelta / newLastWeek) * 100);
+
     const proPayments = approved.filter(p => p.templateId === 'pro' || p.productType === 'pro');
     const totalProPurchases = proPayments.length;
     const proBuyers = new Set(proPayments.map(p => p.uid)).size;
@@ -84,6 +96,9 @@ export function KrokyOverview() {
       netProfit,
       activePro,
       newThisWeek,
+      newLastWeek,
+      weekDelta,
+      weekTrendPct,
       totalProPurchases,
       proBuyers,
       slowConverters: slowConverterEmails.length,
@@ -113,6 +128,23 @@ export function KrokyOverview() {
     return Object.entries(days).map(([date, count]) => ({ date: toDayMonth(date), count }));
   }, [users]);
 
+  // Net revenue (UAH, after Creem fees) taken in per day — the money pulse of
+  // the last 30 days. Unlike a user count, this actually rises and falls.
+  const revenueData = useMemo(() => {
+    const now = new Date();
+    const days: Record<string, number> = {};
+    for (let i = 29; i >= 0; i--) {
+      days[new Date(now.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)] = 0;
+    }
+    payments
+      .filter(p => p.status === 'approved')
+      .forEach(p => {
+        const day = (p.purchasedAt || p.createdAt || '').slice(0, 10);
+        if (day in days) days[day] += paymentNetUah(p, rates);
+      });
+    return Object.entries(days).map(([date, uah]) => ({ date: toDayMonth(date), uah: Math.round(uah) }));
+  }, [payments, rates]);
+
   if (usersLoading || paymentsLoading || ratesLoading) {
     return <div className="text-text-muted">Loading...</div>;
   }
@@ -125,7 +157,12 @@ export function KrokyOverview() {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
         <StatCard label="Total Users" value={stats.totalUsers} icon={<Users className="w-5 h-5" />} />
         <StatCard label="Active Pro" value={stats.activePro} icon={<Crown className="w-5 h-5" />} />
-        <StatCard label="New this week" value={stats.newThisWeek} icon={<UserPlus className="w-5 h-5" />} />
+        <StatCard
+          label="New this week"
+          value={stats.newThisWeek}
+          icon={<UserPlus className="w-5 h-5" />}
+          trend={{ value: stats.weekTrendPct, label: 'vs last week' }}
+        />
       </div>
 
       {/* Revenue */}
@@ -170,6 +207,29 @@ export function KrokyOverview() {
               contentStyle={{ background: '#1a1d27', border: '1px solid #2a2e3a', borderRadius: 8, color: '#f1f5f9' }}
             />
             <Area type="monotone" dataKey="count" stroke="#6366f1" fill="url(#colorCount)" strokeWidth={2} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Daily revenue chart */}
+      <div className="bg-surface-card border border-border rounded-xl p-5 mb-8">
+        <h2 className="text-sm text-text-secondary mb-4">Revenue (30 days, UAH net)</h2>
+        <ResponsiveContainer width="100%" height={200}>
+          <AreaChart data={revenueData}>
+            <defs>
+              <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} width={45}
+              tickFormatter={(v) => Number(v) >= 1000 ? `${Math.round(Number(v) / 1000)}k` : `${v}`} />
+            <Tooltip
+              contentStyle={{ background: '#1a1d27', border: '1px solid #2a2e3a', borderRadius: 8, color: '#f1f5f9' }}
+              formatter={(v) => [`${Math.round(Number(v)).toLocaleString()} UAH`, 'Revenue']}
+            />
+            <Area type="monotone" dataKey="uah" name="Revenue" stroke="#22c55e" fill="url(#colorRevenue)" strokeWidth={2} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
