@@ -33,8 +33,17 @@ export function planBadgeClass(plan?: string): string {
   return `inline-block px-1.5 py-0.5 rounded text-xs ${tone[plan ?? 'free'] ?? tone.free}`;
 }
 
+// Signed-in identity that unlocks kmeta.
 const ADMIN_EMAIL = 'yarovoy.dmytro@gmail.com';
-const ADMIN_EMAILS = [ADMIN_EMAIL, 'dmytro.poplinski@gmail.com', 'dm.romaniuk2323@gmail.com'];
+// Accounts hidden from every kmeta stat (admins + personal test accounts).
+const EXCLUDED_EMAILS = [
+  ADMIN_EMAIL,
+  'dmytro.poplinski@gmail.com',
+  'dm.romaniuk2323@gmail.com',
+  'kmeta.test@gmail.com',
+  'd.yarovyi@goodevas.com',
+  'anichka0908204@gmail.com',
+];
 
 export function useKmetaUsers() {
   const [users, setUsers] = useState<KmetaUser[]>([]);
@@ -61,7 +70,7 @@ export function useKmetaUsers() {
     getDocs(query(collection(kmetaDb, 'users')))
       .then((snap) => {
         const all = snap.docs.map(d => ({ uid: d.id, ...d.data() } as KmetaUser));
-        setUsers(all.filter(u => !ADMIN_EMAILS.includes(u.email ?? '')));
+        setUsers(all.filter(u => !EXCLUDED_EMAILS.includes(u.email ?? '')));
       })
       .catch((e: unknown) => {
         const code = (e as { code?: string })?.code;
