@@ -1,6 +1,6 @@
 import { ProjectCard } from '../components/ProjectCard';
 import { useKrokyUsers, useKrokyPayments } from '../hooks/useKrokyData';
-import { useKmetaUsers } from '../hooks/useKmetaData';
+import { useKmetaUsers, isKmetaPro } from '../hooks/useKmetaData';
 
 export function Home() {
   const { users } = useKrokyUsers();
@@ -31,7 +31,7 @@ export function Home() {
           description="Platform for tutors"
           stats={[
             { label: 'Users', value: kmetaConnected ? kmetaUsers.length : '—' },
-            { label: 'Pro', value: kmetaConnected ? kmetaUsers.filter(u => u.plan === 'pro').length : '—' },
+            { label: 'Pro', value: kmetaConnected ? kmetaUsers.filter(isKmetaPro).length : '—' },
           ]}
         />
       </div>

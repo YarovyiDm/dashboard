@@ -2,15 +2,25 @@ import { useCallback, useEffect, useState } from 'react';
 import { collection, getDocs, query } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { kmetaDb, kmetaAuth } from '../lib/firebase';
+import { toJsDate } from '../lib/date';
 
 export interface KmetaUser {
   uid: string;
   email: string;
   name: string;
   photoURL?: string;
-  createdAt: string;
-  plan?: string;
+  // Firestore Timestamp on kmeta (kroky stores an ISO string); normalize via toJsDate.
+  createdAt?: unknown;
+  plan?: string;            // 'free' | 'pro' | 'cancelled'
+  proExpiresAt?: string;    // ISO string; may outlive a 'cancelled' plan
   specialization?: string;
+}
+
+// Has Pro access right now — true while the subscription hasn't lapsed, which
+// also covers a 'cancelled' plan still within its paid period.
+export function isKmetaPro(u: KmetaUser): boolean {
+  const exp = toJsDate(u.proExpiresAt);
+  return exp ? exp.getTime() > Date.now() : false;
 }
 
 const ADMIN_EMAIL = 'yarovoy.dmytro@gmail.com';

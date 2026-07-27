@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { Users, Crown, UserPlus, LogIn } from 'lucide-react';
 import { StatCard } from '../../components/StatCard';
-import { useKmetaUsers } from '../../hooks/useKmetaData';
-import { toDayMonth } from '../../lib/date';
+import { useKmetaUsers, isKmetaPro } from '../../hooks/useKmetaData';
+import { toDayMonth, toJsDate } from '../../lib/date';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export function KmetaOverview() {
@@ -12,8 +12,11 @@ export function KmetaOverview() {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const newThisWeek = users.filter(u => u.createdAt && new Date(u.createdAt) >= weekAgo).length;
-    const proUsers = users.filter(u => u.plan === 'pro').length;
+    const newThisWeek = users.filter(u => {
+      const d = toJsDate(u.createdAt);
+      return d ? d >= weekAgo : false;
+    }).length;
+    const proUsers = users.filter(isKmetaPro).length;
 
     return {
       totalUsers: users.length,
@@ -30,8 +33,9 @@ export function KmetaOverview() {
       days[d.toISOString().slice(0, 10)] = 0;
     }
     users.forEach(u => {
-      if (u.createdAt) {
-        const day = new Date(u.createdAt).toISOString().slice(0, 10);
+      const d = toJsDate(u.createdAt);
+      if (d) {
+        const day = d.toISOString().slice(0, 10);
         if (day in days) days[day]++;
       }
     });
@@ -88,7 +92,7 @@ export function KmetaOverview() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         <StatCard label="Total Users" value={stats.totalUsers} icon={<Users className="w-5 h-5" />} />
-        <StatCard label="Pro Users" value={stats.proUsers} icon={<Crown className="w-5 h-5" />} />
+        <StatCard label="Active Pro" value={stats.proUsers} icon={<Crown className="w-5 h-5" />} />
         <StatCard label="New this week" value={stats.newThisWeek} icon={<UserPlus className="w-5 h-5" />} />
       </div>
 
