@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { collection, getDocs, query } from 'firebase/firestore';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { collection, getCountFromServer, getDocs, query } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { kmetaDb, kmetaAuth } from '../lib/firebase';
 import { toJsDate } from '../lib/date';
@@ -80,4 +80,63 @@ export function useKmetaUsers() {
   }, []);
 
   return { users, loading, connected, connect, error };
+}
+
+export interface TutorCounts {
+  lessons: number;
+  groups: number;
+  students: number;
+}
+
+// Per-tutor subcollection counts (lessons/groups/students), fetched with
+// aggregate count queries so we never download the documents themselves.
+// `available` flips to false if the admin can't read subcollections yet
+// (i.e. the kmeta rules haven't granted isAdmin() read on {document=**}).
+export function useKmetaSubcounts(users: KmetaUser[]) {
+  const [counts, setCounts] = useState<Record<string, TutorCounts>>({});
+  const [loading, setLoading] = useState(false);
+  const [available, setAvailable] = useState(true);
+
+  useEffect(() => {
+    if (!users.length) {
+      setCounts({});
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const entries = await Promise.all(users.map(async (u) => {
+          const [l, g, s] = await Promise.all([
+            getCountFromServer(collection(kmetaDb, 'users', u.uid, 'lessons')),
+            getCountFromServer(collection(kmetaDb, 'users', u.uid, 'groups')),
+            getCountFromServer(collection(kmetaDb, 'users', u.uid, 'students')),
+          ]);
+          return [u.uid, {
+            lessons: l.data().count,
+            groups: g.data().count,
+            students: s.data().count,
+          }] as const;
+        }));
+        if (cancelled) return;
+        setCounts(Object.fromEntries(entries));
+        setAvailable(true);
+      } catch {
+        if (cancelled) return;
+        setCounts({});
+        setAvailable(false);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [users]);
+
+  const totals = useMemo(() => Object.values(counts).reduce(
+    (a, c) => ({ lessons: a.lessons + c.lessons, groups: a.groups + c.groups, students: a.students + c.students }),
+    { lessons: 0, groups: 0, students: 0 },
+  ), [counts]);
+
+  return { counts, totals, loading, available };
 }
