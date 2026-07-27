@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
-import { Users, Crown, UserPlus } from 'lucide-react';
+import { Users, Crown, UserPlus, LogIn } from 'lucide-react';
 import { StatCard } from '../../components/StatCard';
 import { useKmetaUsers } from '../../hooks/useKmetaData';
 import { toDayMonth } from '../../lib/date';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export function KmetaOverview() {
-  const { users, loading } = useKmetaUsers();
+  const { users, loading, connected, connect, error } = useKmetaUsers();
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -38,8 +38,48 @@ export function KmetaOverview() {
     return Object.entries(days).map(([date, count]) => ({ date: toDayMonth(date), count }));
   }, [users]);
 
+  if (!connected) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold text-text-primary mb-6">Kmeta Overview</h1>
+        <div className="bg-surface-card border border-border rounded-xl p-6 max-w-md">
+          <p className="text-text-secondary mb-4">
+            kmeta — окремий Firebase-проект. Підключи його, щоб побачити дані
+            (окрема авторизація Google, потрібна один раз).
+          </p>
+          <button
+            onClick={connect}
+            className="inline-flex items-center gap-2 bg-accent hover:bg-accent-light text-white px-5 py-2.5 rounded-lg font-medium transition-colors"
+          >
+            <LogIn className="w-4 h-4" />
+            Підключити kmeta
+          </button>
+          {error && <p className="text-red text-sm mt-3">{error}</p>}
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return <div className="text-text-muted">Loading...</div>;
+  }
+
+  if (error) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold text-text-primary mb-6">Kmeta Overview</h1>
+        <div className="bg-surface-card border border-border rounded-xl p-6 max-w-md">
+          <p className="text-red text-sm mb-4">{error}</p>
+          <button
+            onClick={connect}
+            className="inline-flex items-center gap-2 bg-accent hover:bg-accent-light text-white px-5 py-2.5 rounded-lg font-medium transition-colors"
+          >
+            <LogIn className="w-4 h-4" />
+            Спробувати ще
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

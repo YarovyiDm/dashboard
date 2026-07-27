@@ -24,3 +24,4 @@ const existingKmeta = getApps().find(a => a.name === 'kmeta');
 const kmetaApp = existingKmeta || initializeApp(kmetaConfig, 'kmeta');
 
 export const kmetaDb = getFirestore(kmetaApp);
+export const kmetaAuth = getAuth(kmetaApp);

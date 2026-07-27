@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { type User, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
-import { krokyAuth } from '../lib/firebase';
+import { krokyAuth, kmetaAuth } from '../lib/firebase';
 
 interface AuthCtx {
   user: User | null;
@@ -36,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await signOut(krokyAuth);
+    await signOut(kmetaAuth).catch(() => {});
   };
 
   return (
