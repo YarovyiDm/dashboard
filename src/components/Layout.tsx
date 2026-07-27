@@ -6,6 +6,7 @@ import { LayoutDashboard, LogOut, FileText, Pen, QrCode, Briefcase, BarChart3, U
 
 const kmetaNav = [
   { to: '/kmeta', label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
+  { to: '/kmeta/users', label: 'Users', icon: <Users className="w-4 h-4" /> },
 ];
 
 const krokyNav = [

@@ -23,6 +23,16 @@ export function isKmetaPro(u: KmetaUser): boolean {
   return exp ? exp.getTime() > Date.now() : false;
 }
 
+// Tailwind classes for a plan pill (shared by the Overview and Users pages).
+export function planBadgeClass(plan?: string): string {
+  const tone: Record<string, string> = {
+    pro: 'bg-amber/15 text-amber',
+    cancelled: 'bg-red/15 text-red',
+    free: 'bg-surface-hover text-text-muted',
+  };
+  return `inline-block px-1.5 py-0.5 rounded text-xs ${tone[plan ?? 'free'] ?? tone.free}`;
+}
+
 const ADMIN_EMAIL = 'yarovoy.dmytro@gmail.com';
 const ADMIN_EMAILS = [ADMIN_EMAIL, 'dmytro.poplinski@gmail.com', 'dm.romaniuk2323@gmail.com'];
 

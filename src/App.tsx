@@ -12,6 +12,7 @@ import { KrokyUsers } from './pages/kroky/Users';
 import { KrokyUserDetail } from './pages/kroky/UserDetail';
 import { KrokyQR } from './pages/kroky/QR';
 import { KmetaOverview } from './pages/kmeta/Overview';
+import { KmetaUsers } from './pages/kmeta/Users';
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth();
@@ -39,6 +40,7 @@ function ProtectedRoutes() {
         <Route path="kroky/users" element={<KrokyUsers />} />
         <Route path="kroky/users/:uid" element={<KrokyUserDetail />} />
         <Route path="kmeta" element={<KmetaOverview />} />
+        <Route path="kmeta/users" element={<KmetaUsers />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
