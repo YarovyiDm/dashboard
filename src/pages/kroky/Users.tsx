@@ -1,15 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Users as UsersIcon, Crown, Pen, FileText, Briefcase, ChevronLeft, ChevronRight, ArrowUp, ArrowDown } from 'lucide-react';
-import { useKrokyUsers } from '../../hooks/useKrokyData';
+import { Users as UsersIcon, Crown, Pen, FileText, Briefcase, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, AlertTriangle } from 'lucide-react';
+import { useKrokyUsers, useKrokyPayments } from '../../hooks/useKrokyData';
 import { getProPurchaseDate, getTotalExports } from '../../lib/krokyFields';
 import type { UserProfile } from '../../types';
 
 type ProFilter = 'all' | 'pro' | 'non-pro';
 type LocaleFilter = 'all' | 'uk' | 'pl' | 'en';
+type PayFilter = 'all' | 'multi' | 'flagged';
 type SortField = 'registered' | 'visits' | 'exports';
 type SortDir = 'asc' | 'desc';
 const PAGE_SIZE = 10;
+
+const DAY = 24 * 60 * 60 * 1000;
+// Pro is a 30-day product, so two Pro charges closer than this look like a
+// duplicate/callback-race rather than a real repeat purchase.
+const MIN_GAP_DAYS = 10;
+// A single Pro grant is ~30 days; more time left than this hints that two
+// callbacks stacked two grants onto one payment.
+const MAX_PRO_DAYS = 35;
+
+interface UserFlag {
+  proPays: number;
+  flagged: boolean;
+  reasons: string[];
+}
 
 function getSource(u: UserProfile): string {
   if (u.acquisition?.utmSource) return u.acquisition.utmSource;
@@ -32,9 +47,11 @@ function formatDate(iso?: string | null) {
 
 export function KrokyUsers() {
   const { users, loading } = useKrokyUsers();
+  const { payments, loading: paymentsLoading } = useKrokyPayments();
   const [search, setSearch] = useState('');
   const [proFilter, setProFilter] = useState<ProFilter>('all');
   const [localeFilter, setLocaleFilter] = useState<LocaleFilter>('all');
+  const [payFilter, setPayFilter] = useState<PayFilter>('all');
   const [sortField, setSortField] = useState<SortField>('registered');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [page, setPage] = useState(1);
@@ -47,6 +64,39 @@ export function KrokyUsers() {
       setSortDir('desc');
     }
   };
+
+  // Payment-anomaly detection per user — to catch double charges / callback races.
+  const flags = useMemo(() => {
+    const now = Date.now();
+    const proTimes = new Map<string, number[]>();
+    payments.forEach(p => {
+      if (p.status !== 'approved') return;
+      if (!(p.templateId === 'pro' || p.productType === 'pro')) return;
+      const t = new Date(p.purchasedAt || p.createdAt || 0).getTime();
+      if (!Number.isFinite(t)) return;
+      const arr = proTimes.get(p.uid);
+      if (arr) arr.push(t); else proTimes.set(p.uid, [t]);
+    });
+
+    const map = new Map<string, UserFlag>();
+    users.forEach(u => {
+      const times = (proTimes.get(u.uid) ?? []).slice().sort((a, b) => a - b);
+      let minGap = Infinity;
+      for (let i = 1; i < times.length; i++) minGap = Math.min(minGap, (times[i] - times[i - 1]) / DAY);
+
+      const smallGap = times.length > 1 && minGap < MIN_GAP_DAYS;
+      const expMs = u.proExpiresAt ? new Date(u.proExpiresAt).getTime() : NaN;
+      const daysLeft = Number.isFinite(expMs) ? (expMs - now) / DAY : null;
+      const inflatedPro = daysLeft !== null && daysLeft > MAX_PRO_DAYS;
+
+      const reasons: string[] = [];
+      if (smallGap) reasons.push(`2+ Pro-оплати з інтервалом ${minGap < 1 ? '<1' : Math.round(minGap)} дн (норма ≥${MIN_GAP_DAYS})`);
+      if (inflatedPro) reasons.push(`Pro активний ще ${Math.round(daysLeft as number)} дн (норма ≤~30)`);
+
+      map.set(u.uid, { proPays: times.length, flagged: smallGap || inflatedPro, reasons });
+    });
+    return map;
+  }, [users, payments]);
 
   const filtered = useMemo(() => {
     const now = new Date();
@@ -81,17 +131,22 @@ export function KrokyUsers() {
         return localeFilter === 'uk' ? (loc === 'uk' || !loc) : loc === localeFilter;
       });
     }
+    if (payFilter === 'multi') {
+      list = list.filter(u => (flags.get(u.uid)?.proPays ?? 0) > 1);
+    } else if (payFilter === 'flagged') {
+      list = list.filter(u => flags.get(u.uid)?.flagged);
+    }
     return list;
-  }, [users, search, proFilter, localeFilter, sortField, sortDir]);
+  }, [users, flags, search, proFilter, localeFilter, payFilter, sortField, sortDir]);
 
-  useEffect(() => { setPage(1); }, [search, proFilter, localeFilter, sortField, sortDir]);
+  useEffect(() => { setPage(1); }, [search, proFilter, localeFilter, payFilter, sortField, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * PAGE_SIZE;
   const paginated = filtered.slice(pageStart, pageStart + PAGE_SIZE);
 
-  if (loading) return <div className="text-text-muted">Loading...</div>;
+  if (loading || paymentsLoading) return <div className="text-text-muted">Loading...</div>;
 
   return (
     <div>
@@ -131,6 +186,22 @@ export function KrokyUsers() {
               </button>
             ))}
           </div>
+          <div className="flex bg-surface border border-border rounded-lg p-0.5">
+            {(['all', 'multi', 'flagged'] as PayFilter[]).map(f => (
+              <button
+                key={f}
+                onClick={() => setPayFilter(f)}
+                title={f === 'multi' ? '≥2 Pro-оплати' : f === 'flagged' ? 'Підозрілі: малий інтервал між оплатами або роздутий Pro' : undefined}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                  payFilter === f
+                    ? (f === 'flagged' ? 'bg-red/15 text-red' : 'bg-accent/15 text-accent')
+                    : 'text-text-muted hover:text-text-primary'
+                }`}
+              >
+                {f === 'all' ? 'All' : f === 'multi' ? '≥2 Pro' : '⚠ Flagged'}
+              </button>
+            ))}
+          </div>
           <input
             type="text"
             placeholder="Search by name, email..."
@@ -142,7 +213,7 @@ export function KrokyUsers() {
       </div>
 
       <div className="bg-surface-card border border-border rounded-xl overflow-x-auto">
-        <table className="w-full min-w-[720px]">
+        <table className="w-full min-w-[800px]">
           <thead>
             <tr className="border-b border-border text-left">
               <th className="px-4 py-3 text-xs font-medium text-text-muted">User</th>
@@ -174,6 +245,7 @@ export function KrokyUsers() {
                   {sortField === 'exports' && (sortDir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />)}
                 </button>
               </th>
+              <th className="px-4 py-3 text-xs font-medium text-text-muted" title="Кількість успішних Pro-оплат">Pro pays</th>
               <th className="px-4 py-3 text-xs font-medium text-text-muted">Status</th>
             </tr>
           </thead>
@@ -181,8 +253,10 @@ export function KrokyUsers() {
             {paginated.map(u => {
               const now = new Date();
               const proActive = u.isPro && u.proExpiresAt && new Date(u.proExpiresAt) > now;
+              const flag = flags.get(u.uid);
+              const flagged = flag?.flagged ?? false;
               return (
-                <tr key={u.uid} className="border-b border-border last:border-0 hover:bg-surface-hover transition-colors">
+                <tr key={u.uid} className={`border-b border-border last:border-0 transition-colors ${flagged ? 'bg-red/5 hover:bg-red/10' : 'hover:bg-surface-hover'}`}>
                   <td className="px-4 py-3">
                     <Link to={`/kroky/users/${u.uid}`} className="flex items-center gap-3">
                       {u.photoURL ? (
@@ -193,7 +267,7 @@ export function KrokyUsers() {
                         </div>
                       )}
                       <div>
-                        <div className={`text-sm hover:text-accent transition-colors ${proActive ? 'text-amber font-medium' : 'text-text-primary'}`}>{u.displayName || 'No name'}</div>
+                        <div className={`text-sm hover:text-accent transition-colors ${flagged ? 'text-red font-medium' : proActive ? 'text-amber font-medium' : 'text-text-primary'}`}>{u.displayName || 'No name'}</div>
                         <div className="text-xs text-text-muted">{u.email}</div>
                       </div>
                     </Link>
@@ -202,6 +276,16 @@ export function KrokyUsers() {
                   <td className="px-4 py-3 text-sm text-text-secondary">{getSource(u)}</td>
                   <td className="px-4 py-3 text-sm text-text-secondary">{u.visitCount ?? 0}</td>
                   <td className="px-4 py-3 text-sm text-text-secondary">{getTotalExports(u) || '—'}</td>
+                  <td className="px-4 py-3 text-sm">
+                    {flagged ? (
+                      <span className="inline-flex items-center gap-1 text-red font-medium" title={flag?.reasons.join(' · ')}>
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        {flag?.proPays ?? 0}
+                      </span>
+                    ) : (
+                      <span className="text-text-secondary">{flag?.proPays ?? 0}</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5 items-center flex-wrap">
                       {proActive && (() => {
