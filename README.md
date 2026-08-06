@@ -71,3 +71,4 @@ export default defineConfig([
   },
 ])
 ```
+Powered by [Kroky.com.ua](https://kroky.com.ua)
