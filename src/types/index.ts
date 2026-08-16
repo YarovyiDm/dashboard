@@ -81,7 +81,7 @@ export interface UserProfile {
     utmCampaign?: string;
     deviceType: 'mobile' | 'tablet' | 'desktop';
     // Locale chosen at signup (added later; undefined on legacy users).
-    signupLocale?: 'uk' | 'pl' | 'en';
+    signupLocale?: 'uk' | 'pl' | 'en' | 'ro';
   };
 }
 
@@ -100,6 +100,6 @@ export interface PaymentRecord {
   purchasedAt?: string;
   expiresAt?: string;
   trigger?: ConversionTrigger;
-  locale?: 'uk' | 'pl' | 'en';
+  locale?: 'uk' | 'pl' | 'en' | 'ro';
   currency?: 'UAH' | 'PLN' | 'USD';
 }

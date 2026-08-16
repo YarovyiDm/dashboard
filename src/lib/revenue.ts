@@ -12,7 +12,7 @@ export function paymentCurrency(p: PaymentRecord): keyof Rates {
   if (p.currency) return p.currency;
   // Legacy records without an explicit currency: infer from locale.
   if (p.locale === 'pl') return 'PLN';
-  if (p.locale === 'en') return 'USD';
+  if (p.locale === 'en' || p.locale === 'ro') return 'USD';
   return 'UAH';
 }
 

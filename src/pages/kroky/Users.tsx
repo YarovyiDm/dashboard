@@ -6,7 +6,7 @@ import { getProPurchaseDate, getTotalExports } from '../../lib/krokyFields';
 import type { UserProfile } from '../../types';
 
 type ProFilter = 'all' | 'pro' | 'non-pro';
-type LocaleFilter = 'all' | 'uk' | 'pl' | 'en';
+type LocaleFilter = 'all' | 'uk' | 'pl' | 'ro' | 'en';
 type PayFilter = 'all' | 'multi' | 'flagged';
 type SortField = 'registered' | 'visits' | 'exports';
 type SortDir = 'asc' | 'desc';
@@ -172,7 +172,7 @@ export function KrokyUsers() {
             ))}
           </div>
           <div className="flex bg-surface border border-border rounded-lg p-0.5">
-            {(['all', 'uk', 'pl', 'en'] as LocaleFilter[]).map(f => (
+            {(['all', 'uk', 'pl', 'ro', 'en'] as LocaleFilter[]).map(f => (
               <button
                 key={f}
                 onClick={() => setLocaleFilter(f)}
