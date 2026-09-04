@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, getCountFromServer, getDocs, query } from 'firebase/firestore';
+import { collection, count, getAggregateFromServer, getCountFromServer, getDocs, query, sum } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { kmetaDb, kmetaAuth } from '../lib/firebase';
 import { toJsDate } from '../lib/date';
@@ -14,6 +14,13 @@ export interface KmetaUser {
   plan?: string;            // 'free' | 'pro' | 'cancelled'
   proExpiresAt?: string;    // ISO string; may outlive a 'cancelled' plan
   specialization?: string;
+  // Subscription / settings on the tutor doc.
+  lastPaymentAt?: string;
+  autoRenew?: boolean;
+  lessonDuration?: number;
+  remindBefore10?: boolean;
+  remindBefore30?: boolean;
+  subscriptionOrderRef?: string;
 }
 
 // Has Pro access right now — true while the subscription hasn't lapsed, which
@@ -158,4 +165,100 @@ export function useKmetaSubcounts(users: KmetaUser[]) {
   ), [counts]);
 
   return { counts, totals, loading, available };
+}
+
+export interface TutorFullCounts {
+  students: number;
+  groups: number;
+  lessons: number;
+  payments: number;
+}
+
+// Subcollection counts for a single tutor (used on the detail page); includes
+// paymentLogs. `available` is false if the admin can't read subcollections.
+export function useKmetaTutorCounts(uid: string | undefined, enabled: boolean) {
+  const [counts, setCounts] = useState<TutorFullCounts | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [available, setAvailable] = useState(true);
+
+  useEffect(() => {
+    if (!enabled || !uid) {
+      setCounts(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const [s, g, l, p] = await Promise.all([
+          getCountFromServer(collection(kmetaDb, 'users', uid, 'students')),
+          getCountFromServer(collection(kmetaDb, 'users', uid, 'groups')),
+          getCountFromServer(collection(kmetaDb, 'users', uid, 'lessons')),
+          getCountFromServer(collection(kmetaDb, 'users', uid, 'paymentLogs')),
+        ]);
+        if (cancelled) return;
+        setCounts({
+          students: s.data().count,
+          groups: g.data().count,
+          lessons: l.data().count,
+          payments: p.data().count,
+        });
+        setAvailable(true);
+      } catch {
+        if (cancelled) return;
+        setCounts(null);
+        setAvailable(false);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [uid, enabled]);
+
+  return { counts, loading, available };
+}
+
+// Platform subscription revenue — per-tutor sum + count of the
+// users/{uid}/subscriptionPayments logs (kmeta's own income from Pro), via
+// server-side aggregation. Empty for tutors who never paid. Distinct from
+// paymentLogs (which is tutors' lesson income from students).
+export function useKmetaSubscriptionRevenue(users: KmetaUser[], enabled: boolean) {
+  const [data, setData] = useState<{ total: number; count: number } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [available, setAvailable] = useState(true);
+
+  useEffect(() => {
+    if (!enabled || !users.length) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const per = await Promise.all(users.map(u =>
+          getAggregateFromServer(collection(kmetaDb, 'users', u.uid, 'subscriptionPayments'), {
+            total: sum('amount'),
+            count: count(),
+          }).then(agg => ({ total: agg.data().total ?? 0, count: agg.data().count }))
+        ));
+        if (cancelled) return;
+        setData({
+          total: per.reduce((s, p) => s + (p.total || 0), 0),
+          count: per.reduce((s, p) => s + p.count, 0),
+        });
+        setAvailable(true);
+      } catch {
+        if (cancelled) return;
+        setData(null);
+        setAvailable(false);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [users, enabled]);
+
+  return { data, loading, available };
 }

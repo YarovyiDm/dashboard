@@ -1,13 +1,24 @@
 import { useMemo } from 'react';
-import { Users, Crown, UserPlus, LogIn, BookOpen, Layers, GraduationCap } from 'lucide-react';
+import { Users, Crown, UserPlus, LogIn, BookOpen, Layers, GraduationCap, DollarSign } from 'lucide-react';
 import { StatCard } from '../../components/StatCard';
-import { useKmetaUsers, useKmetaSubcounts, isKmetaPro } from '../../hooks/useKmetaData';
+import { useKmetaUsers, useKmetaSubcounts, useKmetaSubscriptionRevenue, isKmetaPro } from '../../hooks/useKmetaData';
 import { toDayMonth, toJsDate } from '../../lib/date';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+
+const PRO_PRICE = 149;
+// Pro payments made before subscriptionPayments logging existed — they have no
+// records in the DB, so they're added as a fixed legacy baseline.
+// TODO: drop once these are backfilled into subscriptionPayments.
+const LEGACY_PRO_PAYMENTS = 4;
+// Of each 149 UAH charge, this much reaches the account after WayForPay's fee.
+const WAYFORPAY_PAYOUT_RATIO = 146 / 149;
+// 5% ФОП single tax + 1% військовий збір.
+const TOTAL_TAX = 0.06;
 
 export function KmetaOverview() {
   const { users, loading, connected, connect, error } = useKmetaUsers();
   const { totals, loading: countsLoading, available: countsAvailable } = useKmetaSubcounts(users);
+  const { data: subRev, available: subRevAvailable } = useKmetaSubscriptionRevenue(users, connected);
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -93,6 +104,14 @@ export function KmetaOverview() {
 
   const total = (n: number): string | number => (!countsAvailable ? '—' : countsLoading ? '…' : n);
 
+  // Revenue = logged subscription payments + a fixed legacy baseline for the
+  // pre-logging payments. Net strips WayForPay's fee and taxes.
+  const realGross = subRevAvailable && subRev ? subRev.total : 0;
+  const realCount = subRevAvailable && subRev ? subRev.count : 0;
+  const grossRevenue = LEGACY_PRO_PAYMENTS * PRO_PRICE + realGross;
+  const paymentsCount = LEGACY_PRO_PAYMENTS + realCount;
+  const netRevenue = grossRevenue * WAYFORPAY_PAYOUT_RATIO * (1 - TOTAL_TAX);
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-text-primary mb-6">Kmeta Overview</h1>
@@ -102,6 +121,29 @@ export function KmetaOverview() {
         <StatCard label="Total Users" value={stats.totalUsers} icon={<Users className="w-5 h-5" />} />
         <StatCard label="Active Pro" value={stats.proUsers} icon={<Crown className="w-5 h-5" />} />
         <StatCard label="New this week" value={stats.newThisWeek} icon={<UserPlus className="w-5 h-5" />} />
+      </div>
+
+      {/* Subscription revenue: logged payments + legacy baseline */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <div className="bg-surface-card border border-border rounded-xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-text-secondary text-sm">Revenue</span>
+            <span className="text-text-muted"><DollarSign className="w-5 h-5" /></span>
+          </div>
+          <div className="text-2xl font-semibold text-text-primary">{Math.round(grossRevenue).toLocaleString()} UAH</div>
+          <div className="mt-2 text-xs text-text-muted">
+            {paymentsCount} оплат · {LEGACY_PRO_PAYMENTS} legacy + {realCount} з логів
+          </div>
+        </div>
+        <div className="bg-surface-card border border-border rounded-xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-text-secondary text-sm">Net (after fees & tax)</span>
+          </div>
+          <div className="text-2xl font-semibold text-green">{Math.round(netRevenue).toLocaleString()} UAH</div>
+          <div className="mt-2 text-xs text-text-muted">
+            WayForPay 146/149 · −5% ФОП −1% ЗЗ
+          </div>
+        </div>
       </div>
 
       {/* Activity totals across all tutors */}

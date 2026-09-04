@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Users as UsersIcon, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, LogIn } from 'lucide-react';
 import { useKmetaUsers, useKmetaSubcounts, planBadgeClass, type TutorCounts } from '../../hooks/useKmetaData';
 import { toDayMonthYear, toJsDate } from '../../lib/date';
@@ -177,7 +178,7 @@ export function KmetaUsers() {
             {paginated.map(u => (
               <tr key={u.uid} className="border-b border-border last:border-0 hover:bg-surface-hover transition-colors">
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
+                  <Link to={`/kmeta/users/${u.uid}`} className="flex items-center gap-3 group">
                     {u.photoURL ? (
                       <img src={u.photoURL} alt="" className="w-8 h-8 rounded-full" />
                     ) : (
@@ -186,10 +187,10 @@ export function KmetaUsers() {
                       </div>
                     )}
                     <div>
-                      <div className="text-sm text-text-primary">{u.name || 'No name'}</div>
+                      <div className="text-sm text-text-primary group-hover:text-accent transition-colors">{u.name || 'No name'}</div>
                       <div className="text-xs text-text-muted">{u.email}</div>
                     </div>
-                  </div>
+                  </Link>
                 </td>
                 <td className="px-4 py-3 text-sm text-text-secondary">{u.specialization || '—'}</td>
                 <td className="px-4 py-3 text-sm text-text-secondary">
