@@ -20,8 +20,8 @@ function ProtectedRoutes() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full bg-surface">
-        <div className="text-text-muted">Loading...</div>
+      <div className="theme-pine flex items-center justify-center h-full">
+        <div className="k-spin w-8 h-8 rounded-full border-[3px] border-accent/20 border-t-accent" aria-label="Loading" />
       </div>
     );
   }

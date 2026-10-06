@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Users as UsersIcon, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, LogIn, Globe, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Globe, AlertTriangle, Search, X, SlidersHorizontal, GraduationCap, Layers, BookOpen } from 'lucide-react';
 import {
   useKmetaUsers, useKmetaSubcounts, useKmetaPageReports, useKmetaPublicProfiles,
   kmetaEffectiveStatus, statusBadgeClass, KMETA_STATUS_LABEL, kmetaAcquisitionChannel,
   type TutorCounts, type KmetaStatus, type KmetaChannel,
 } from '../../hooks/useKmetaData';
 import { toDayMonthYear, toJsDate } from '../../lib/date';
+import { usePersistentState, oneOf } from '../../hooks/usePersistentState';
+import { PageHeader, ConnectGate, LoadingSkeleton, Avatar } from './ui';
+import { stagger } from './theme';
 
 const SITE = 'https://kmeta.com.ua';
 
@@ -15,6 +18,15 @@ type ChannelFilter = 'all' | 'ads' | 'organic' | 'direct';
 type SortField = 'registered' | 'students' | 'groups' | 'lessons';
 type SortDir = 'asc' | 'desc';
 const PAGE_SIZE = 10;
+
+const STATUS_VALUES = ['all', 'free', 'pro', 'pro_ending', 'cancelled'] as const;
+const CHANNEL_VALUES = ['all', 'ads', 'organic', 'direct'] as const;
+const SORT_FIELDS = ['registered', 'students', 'groups', 'lessons'] as const;
+const SORT_DIRS = ['asc', 'desc'] as const;
+const isBool = (v: unknown): v is boolean => typeof v === 'boolean';
+const isPage = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 1;
+// localStorage keys — filters survive reloads and navigating to a tutor and back.
+const K = 'kmeta.users.';
 
 const STATUS_FILTERS: { v: StatusFilter; label: string }[] = [
   { v: 'all', label: 'All' },
@@ -34,7 +46,7 @@ function channelPill(ch: KmetaChannel) {
   if (ch === 'unknown') return null;
   const tone = ch === 'ads' ? 'bg-blue/15 text-blue' : ch === 'organic' ? 'bg-green/15 text-green' : 'bg-surface-hover text-text-muted';
   const label = ch === 'ads' ? 'Ads' : ch === 'organic' ? 'Org' : 'Dir';
-  return <span className={`px-1 rounded text-[10px] shrink-0 ${tone}`}>{label}</span>;
+  return <span className={`px-1.5 py-px rounded-full text-[10px] font-semibold shrink-0 ${tone}`}>{label}</span>;
 }
 
 export function KmetaUsers() {
@@ -42,14 +54,14 @@ export function KmetaUsers() {
   const { counts, loading: countsLoading, available: countsAvailable } = useKmetaSubcounts(users);
   const { reports } = useKmetaPageReports(connected);
   const { profiles } = useKmetaPublicProfiles(connected);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
-  const [pageOnly, setPageOnly] = useState(false);
-  const [newReportsOnly, setNewReportsOnly] = useState(false);
-  const [sortField, setSortField] = useState<SortField>('registered');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [page, setPage] = useState(1);
+  const [search, setSearch] = usePersistentState(K + 'search', '');
+  const [statusFilter, setStatusFilter] = usePersistentState<StatusFilter>(K + 'status', 'all', oneOf(STATUS_VALUES));
+  const [channelFilter, setChannelFilter] = usePersistentState<ChannelFilter>(K + 'channel', 'all', oneOf(CHANNEL_VALUES));
+  const [pageOnly, setPageOnly] = usePersistentState(K + 'pageOnly', false, isBool);
+  const [newReportsOnly, setNewReportsOnly] = usePersistentState(K + 'newReportsOnly', false, isBool);
+  const [sortField, setSortField] = usePersistentState<SortField>(K + 'sortField', 'registered', oneOf(SORT_FIELDS));
+  const [sortDir, setSortDir] = usePersistentState<SortDir>(K + 'sortDir', 'desc', oneOf(SORT_DIRS));
+  const [page, setPage] = usePersistentState(K + 'page', 1, isPage);
 
   const reportsByUid = useMemo(() => {
     const m = new Map<string, { count: number; newCount: number }>();
@@ -100,46 +112,29 @@ export function KmetaUsers() {
     return list;
   }, [users, counts, search, statusFilter, channelFilter, pageOnly, newReportsOnly, reportsByUid, sortField, sortDir]);
 
-  useEffect(() => { setPage(1); }, [search, statusFilter, channelFilter, pageOnly, newReportsOnly, sortField, sortDir]);
+  // Back to page 1 when filters change — but not on mount, so the restored
+  // page survives opening a tutor and coming back.
+  const filterKey = JSON.stringify([search, statusFilter, channelFilter, pageOnly, newReportsOnly, sortField, sortDir]);
+  const lastFilterKey = useRef(filterKey);
+  useEffect(() => {
+    if (lastFilterKey.current === filterKey) return;
+    lastFilterKey.current = filterKey;
+    setPage(1);
+  }, [filterKey, setPage]);
+
+  const activeFilters = (statusFilter !== 'all' ? 1 : 0) + (channelFilter !== 'all' ? 1 : 0) + (pageOnly ? 1 : 0) + (newReportsOnly ? 1 : 0) + (search ? 1 : 0);
+  const resetFilters = () => {
+    setSearch(''); setStatusFilter('all'); setChannelFilter('all'); setPageOnly(false); setNewReportsOnly(false);
+  };
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * PAGE_SIZE;
   const paginated = filtered.slice(pageStart, pageStart + PAGE_SIZE);
 
-  if (!connected) {
-    return (
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary mb-6">Kmeta Users</h1>
-        <div className="bg-surface-card border border-border rounded-xl p-6 max-w-md">
-          <p className="text-text-secondary mb-4">
-            kmeta — окремий Firebase-проект. Підключи його, щоб побачити дані
-            (окрема авторизація Google, потрібна один раз).
-          </p>
-          <button onClick={connect} className="inline-flex items-center gap-2 bg-accent hover:bg-accent-light text-white px-5 py-2.5 rounded-lg font-medium transition-colors">
-            <LogIn className="w-4 h-4" /> Підключити kmeta
-          </button>
-          {error && <p className="text-red text-sm mt-3">{error}</p>}
-        </div>
-      </div>
-    );
-  }
-
-  if (loading) return <div className="text-text-muted">Loading...</div>;
-
-  if (error) {
-    return (
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary mb-6">Kmeta Users</h1>
-        <div className="bg-surface-card border border-border rounded-xl p-6 max-w-md">
-          <p className="text-red text-sm mb-4">{error}</p>
-          <button onClick={connect} className="inline-flex items-center gap-2 bg-accent hover:bg-accent-light text-white px-5 py-2.5 rounded-lg font-medium transition-colors">
-            <LogIn className="w-4 h-4" /> Спробувати ще
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (!connected) return <ConnectGate title="Users" error={error} onConnect={connect} />;
+  if (loading) return <LoadingSkeleton rows={2} />;
+  if (error) return <ConnectGate title="Users" error={error} onConnect={connect} retry />;
 
   const cellCount = (uid: string, key: keyof TutorCounts): string | number => {
     if (!countsAvailable) return '—';
@@ -149,24 +144,27 @@ export function KmetaUsers() {
   };
 
   const sortableHead = (field: SortField, label: string) => (
-    <th className="px-4 py-3 text-xs font-medium text-text-muted">
+    <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
       <button
         onClick={() => toggleSort(field)}
-        className={`inline-flex items-center gap-1 hover:text-text-primary transition-colors ${sortField === field ? 'text-text-primary' : ''}`}
+        className={`inline-flex items-center gap-1 uppercase tracking-wider hover:text-text-primary transition-colors ${sortField === field ? 'text-accent' : ''}`}
       >
         {label}
         {sortField === field && (sortDir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />)}
       </button>
     </th>
   );
+  const plainHead = (label: string) => (
+    <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted">{label}</th>
+  );
 
   const segmented = <T extends string>(opts: { v: T; label: string }[], value: T, set: (v: T) => void) => (
-    <div className="flex bg-surface border border-border rounded-lg p-0.5">
+    <div className="flex shrink-0 bg-surface-card border border-border rounded-xl p-1">
       {opts.map(o => (
         <button
           key={o.v}
           onClick={() => set(o.v)}
-          className={`px-3 py-1.5 text-xs rounded-md transition-colors ${value === o.v ? 'bg-accent/15 text-accent' : 'text-text-muted hover:text-text-primary'}`}
+          className={`k-chip px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap ${value === o.v ? 'bg-accent text-[#1d1503] shadow-[0_4px_14px_-6px_var(--k-gold-glow)]' : 'text-text-muted hover:text-text-primary'}`}
         >
           {o.label}
         </button>
@@ -174,37 +172,101 @@ export function KmetaUsers() {
     </div>
   );
 
+  const toggle = (on: boolean, onClick: () => void, children: ReactNode, title: string, danger = false) => (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`k-chip shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border whitespace-nowrap ${
+        on
+          ? danger ? 'bg-red/15 text-red border-red/40' : 'bg-accent/15 text-accent border-accent/40'
+          : 'bg-surface-card border-border text-text-muted hover:text-text-primary'
+      }`}
+    >
+      {children}
+    </button>
+  );
+
+  const reportCell = (uid: string) => {
+    const rc = reportsByUid.get(uid);
+    if (!rc) return <span className="text-text-muted">—</span>;
+    if (rc.newCount > 0) return <span className="inline-flex items-center gap-1 text-red font-semibold"><AlertTriangle className="w-3.5 h-3.5" />{rc.count}</span>;
+    return <span className="text-text-secondary">{rc.count}</span>;
+  };
+
+  const pageLink = (slug: string | undefined, size = 'w-4 h-4') => {
+    if (!slug) return null;
+    const published = publishedBySlug.get(slug);
+    return (
+      <a
+        href={`${SITE}/t/${slug}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={e => e.stopPropagation()}
+        title={published === false ? 'Page (switched off)' : 'Open public page'}
+        className={`shrink-0 grid place-items-center w-7 h-7 rounded-lg ${published === false ? 'text-text-muted bg-surface-hover' : 'text-green bg-green/10'} hover:opacity-80`}
+      >
+        <Globe className={size} />
+      </a>
+    );
+  };
+
+  const fmtD = (v: unknown) => toDayMonthYear(toJsDate(v)?.toISOString() ?? null);
+
   return (
-    <div>
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-text-primary flex items-center gap-3">
-          <UsersIcon className="w-6 h-6" /> Users
-          <span className="text-base font-normal text-text-muted">({users.length})</span>
-        </h1>
-        <div className="flex flex-wrap items-center gap-2">
-          {segmented(STATUS_FILTERS, statusFilter, setStatusFilter)}
-          {segmented(CHANNEL_FILTERS, channelFilter, setChannelFilter)}
-          <button
-            onClick={() => setPageOnly(v => !v)}
-            title="Has a booking page"
-            className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${pageOnly ? 'bg-accent/15 text-accent border-accent/30' : 'bg-surface border-border text-text-muted hover:text-text-primary'}`}
-          >
-            Page
-          </button>
-          <button
-            onClick={() => setNewReportsOnly(v => !v)}
-            title="Has new (unreviewed) page reports"
-            className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border transition-colors ${newReportsOnly ? 'bg-red/15 text-red border-red/30' : 'bg-surface border-border text-text-muted hover:text-text-primary'}`}
-          >
-            <AlertTriangle className="w-3 h-3" /> Reports
-          </button>
+    <div className="max-w-7xl">
+      <PageHeader
+        title={<>Users <span className="text-text-muted font-bold text-xl align-middle ml-1">{users.length}</span></>}
+        subtitle={activeFilters > 0 ? <>Знайдено <span className="text-accent font-semibold">{filtered.length}</span> · фільтри збережено</> : 'Усі тьютори kmeta'}
+      />
+
+      {/* Filters */}
+      <div className="k-rise space-y-3 mb-4 sm:mb-5" style={stagger(1)}>
+        <div className="relative">
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
           <input
-            type="text"
-            placeholder="Search by name, email, specialization..."
+            type="search"
+            placeholder="Search by name, email, specialization…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted w-full sm:w-64 focus:outline-none focus:border-accent"
+            className="w-full bg-surface-card border border-border rounded-xl pl-10 pr-10 py-3 text-base sm:text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent/60 focus:ring-4 focus:ring-accent/10 transition-shadow [&::-webkit-search-cancel-button]:hidden"
           />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-text-muted hover:text-text-primary" aria-label="Clear search">
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <div className="k-rail flex items-center gap-2 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
+          {segmented(STATUS_FILTERS, statusFilter, setStatusFilter)}
+          {segmented(CHANNEL_FILTERS, channelFilter, setChannelFilter)}
+          {toggle(pageOnly, () => setPageOnly(v => !v), <><Globe className="w-3.5 h-3.5" /> Page</>, 'Has a booking page')}
+          {toggle(newReportsOnly, () => setNewReportsOnly(v => !v), <><AlertTriangle className="w-3.5 h-3.5" /> Reports</>, 'Has new (unreviewed) page reports', true)}
+          {activeFilters > 0 && (
+            <button onClick={resetFilters} className="k-chip k-fade shrink-0 inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold rounded-xl text-text-muted hover:text-red">
+              <X className="w-3.5 h-3.5" /> Скинути ({activeFilters})
+            </button>
+          )}
+        </div>
+        {/* Mobile sort */}
+        <div className="md:hidden flex items-center gap-2 text-xs">
+          <SlidersHorizontal className="w-3.5 h-3.5 text-text-muted" />
+          <select
+            value={sortField}
+            onChange={e => setSortField(e.target.value as SortField)}
+            className="bg-surface-card border border-border rounded-lg px-2.5 py-1 text-base text-text-primary focus:outline-none focus:border-accent/60"
+          >
+            <option value="registered">Registered</option>
+            <option value="students">Students</option>
+            <option value="groups">Groups</option>
+            <option value="lessons">Lessons</option>
+          </select>
+          <button
+            onClick={() => setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}
+            className="k-chip inline-flex items-center gap-1 bg-surface-card border border-border rounded-lg px-2.5 py-1.5 text-text-primary"
+          >
+            {sortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
+            {sortDir === 'asc' ? 'Asc' : 'Desc'}
+          </button>
         </div>
       </div>
 
@@ -214,101 +276,124 @@ export function KmetaUsers() {
         </p>
       )}
 
-      <div className="bg-surface-card border border-border rounded-xl overflow-x-auto">
-        <table className="w-full min-w-[920px]">
-          <thead>
-            <tr className="border-b border-border text-left">
-              <th className="px-4 py-3 text-xs font-medium text-text-muted">Tutor</th>
-              <th className="px-4 py-3 text-xs font-medium text-text-muted">Specialization</th>
-              {sortableHead('registered', 'Registered')}
-              {sortableHead('students', 'Students')}
-              {sortableHead('groups', 'Groups')}
-              {sortableHead('lessons', 'Lessons')}
-              <th className="px-4 py-3 text-xs font-medium text-text-muted">Reports</th>
-              <th className="px-4 py-3 text-xs font-medium text-text-muted">Status</th>
-              <th className="px-4 py-3 text-xs font-medium text-text-muted">Pro until</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginated.map(u => {
-              const status = kmetaEffectiveStatus(u);
-              const channel = kmetaAcquisitionChannel(u);
-              const rc = reportsByUid.get(u.uid);
-              const published = u.publicSlug ? publishedBySlug.get(u.publicSlug) : undefined;
-              return (
-                <tr key={u.uid} className="border-b border-border last:border-0 hover:bg-surface-hover transition-colors">
-                  <td className="px-4 py-3">
+      {filtered.length === 0 && (
+        <div className="k-card k-fade p-10 text-center">
+          <div className="text-text-secondary font-semibold mb-1">Нікого не знайдено</div>
+          <div className="text-sm text-text-muted mb-4">Спробуй змінити фільтри</div>
+          {activeFilters > 0 && <button onClick={resetFilters} className="k-btn-gold px-4 py-2 rounded-xl text-sm">Скинути фільтри</button>}
+        </div>
+      )}
+
+      {/* Mobile: cards */}
+      {filtered.length > 0 && (
+        <div className="md:hidden space-y-2.5" key={`m-${currentPage}-${filterKey}`}>
+          {paginated.map((u, idx) => {
+            const status = kmetaEffectiveStatus(u);
+            const isPro = status === 'pro' || status === 'pro_ending';
+            return (
+              <Link key={u.uid} to={`/kmeta/users/${u.uid}`} className="k-card k-rise block p-3.5 active:scale-[0.99] transition-transform" style={stagger(idx)}>
+                <div className="flex items-center gap-3">
+                  <Avatar src={u.photoURL} name={u.name || u.email} size={42} gold={isPro} />
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <Link to={`/kmeta/users/${u.uid}`} className="flex items-center gap-3 group min-w-0">
-                        {u.photoURL ? (
-                          <img src={u.photoURL} alt="" className="w-8 h-8 rounded-full shrink-0" />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-surface-hover flex items-center justify-center text-text-muted text-xs shrink-0">
-                            {(u.name || u.email || '?')[0]}
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <div className="text-sm text-text-primary group-hover:text-accent transition-colors truncate">{u.name || 'No name'}</div>
-                          <div className="text-xs text-text-muted flex items-center gap-1.5">
-                            <span className="truncate">{u.email}</span>
-                            {channelPill(channel)}
-                          </div>
-                        </div>
-                      </Link>
-                      {u.publicSlug && (
-                        <a
-                          href={`${SITE}/t/${u.publicSlug}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={published === false ? 'Page (switched off)' : 'Open public page'}
-                          className={`shrink-0 ${published === false ? 'text-text-muted' : 'text-green'} hover:opacity-80`}
-                        >
-                          <Globe className="w-4 h-4" />
-                        </a>
-                      )}
+                      <span className="text-[15px] font-bold text-text-primary truncate">{u.name || 'No name'}</span>
+                      {channelPill(kmetaAcquisitionChannel(u))}
                     </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{u.specialization || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{toDayMonthYear(toJsDate(u.createdAt)?.toISOString() ?? null)}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{cellCount(u.uid, 'students')}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{cellCount(u.uid, 'groups')}</td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{cellCount(u.uid, 'lessons')}</td>
-                  <td className="px-4 py-3 text-sm">
-                    {!rc ? (
-                      <span className="text-text-muted">—</span>
-                    ) : rc.newCount > 0 ? (
-                      <span className="inline-flex items-center gap-1 text-red font-medium"><AlertTriangle className="w-3.5 h-3.5" />{rc.count}</span>
-                    ) : (
-                      <span className="text-text-secondary">{rc.count}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
+                    <div className="text-xs text-text-muted truncate">{u.email}</div>
+                  </div>
+                  {pageLink(u.publicSlug)}
+                </div>
+                <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-border/70">
+                  <div className="flex items-center gap-3.5 text-xs text-text-secondary">
+                    <span className="inline-flex items-center gap-1"><GraduationCap className="w-3.5 h-3.5 text-text-muted" />{cellCount(u.uid, 'students')}</span>
+                    <span className="inline-flex items-center gap-1"><Layers className="w-3.5 h-3.5 text-text-muted" />{cellCount(u.uid, 'groups')}</span>
+                    <span className="inline-flex items-center gap-1"><BookOpen className="w-3.5 h-3.5 text-text-muted" />{cellCount(u.uid, 'lessons')}</span>
+                    {reportsByUid.get(u.uid) && <span className="text-xs">{reportCell(u.uid)}</span>}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[11px] text-text-muted">{fmtD(u.createdAt)}</span>
                     <span className={statusBadgeClass(status)}>{KMETA_STATUS_LABEL[status]}</span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-text-secondary">{toDayMonthYear(toJsDate(u.proExpiresAt)?.toISOString() ?? null)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                  </div>
+                </div>
+                {u.specialization && <div className="text-xs text-text-muted mt-2 truncate">{u.specialization}</div>}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Desktop: table */}
+      {filtered.length > 0 && (
+        <div className="hidden md:block k-card k-rise overflow-x-auto" style={stagger(2)}>
+          <table className="w-full min-w-[920px]">
+            <thead>
+              <tr className="border-b border-border text-left">
+                {plainHead('Tutor')}
+                {plainHead('Specialization')}
+                {sortableHead('registered', 'Registered')}
+                {sortableHead('students', 'Students')}
+                {sortableHead('groups', 'Groups')}
+                {sortableHead('lessons', 'Lessons')}
+                {plainHead('Reports')}
+                {plainHead('Status')}
+                {plainHead('Pro until')}
+              </tr>
+            </thead>
+            <tbody key={`d-${currentPage}-${filterKey}`}>
+              {paginated.map((u, idx) => {
+                const status = kmetaEffectiveStatus(u);
+                const isPro = status === 'pro' || status === 'pro_ending';
+                return (
+                  <tr key={u.uid} className="k-rise border-b border-border/60 last:border-0 hover:bg-surface-hover/70 transition-colors" style={stagger(idx)}>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Link to={`/kmeta/users/${u.uid}`} className="flex items-center gap-3 group min-w-0 flex-1">
+                          <Avatar src={u.photoURL} name={u.name || u.email} size={34} gold={isPro} />
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-text-primary group-hover:text-accent transition-colors truncate">{u.name || 'No name'}</div>
+                            <div className="text-xs text-text-muted flex items-center gap-1.5">
+                              <span className="truncate">{u.email}</span>
+                              {channelPill(kmetaAcquisitionChannel(u))}
+                            </div>
+                          </div>
+                        </Link>
+                        {pageLink(u.publicSlug)}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-text-secondary">{u.specialization || '—'}</td>
+                    <td className="px-4 py-3 text-sm text-text-secondary tabular-nums">{fmtD(u.createdAt)}</td>
+                    <td className="px-4 py-3 text-sm text-text-primary font-semibold tabular-nums">{cellCount(u.uid, 'students')}</td>
+                    <td className="px-4 py-3 text-sm text-text-secondary tabular-nums">{cellCount(u.uid, 'groups')}</td>
+                    <td className="px-4 py-3 text-sm text-text-secondary tabular-nums">{cellCount(u.uid, 'lessons')}</td>
+                    <td className="px-4 py-3 text-sm">{reportCell(u.uid)}</td>
+                    <td className="px-4 py-3"><span className={statusBadgeClass(status)}>{KMETA_STATUS_LABEL[status]}</span></td>
+                    <td className="px-4 py-3 text-sm text-text-secondary tabular-nums">{fmtD(u.proExpiresAt)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {filtered.length > 0 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-text-muted">
-          <div>Showing {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, filtered.length)} of {filtered.length}</div>
+        <div className="flex items-center justify-between gap-3 mt-4 text-sm text-text-muted">
+          <div className="text-xs sm:text-sm">{pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, filtered.length)} of {filtered.length}</div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
+              onClick={() => setPage(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
-              className="p-1.5 rounded-md border border-border hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              aria-label="Previous page"
+              className="k-chip grid place-items-center w-10 h-10 rounded-xl border border-border bg-surface-card hover:border-accent/40 hover:text-accent disabled:opacity-30 disabled:pointer-events-none"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="text-text-primary">{currentPage} / {totalPages}</span>
+            <span className="text-text-primary font-semibold tabular-nums min-w-14 text-center">{currentPage} / {totalPages}</span>
             <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
-              className="p-1.5 rounded-md border border-border hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              aria-label="Next page"
+              className="k-chip grid place-items-center w-10 h-10 rounded-xl border border-border bg-surface-card hover:border-accent/40 hover:text-accent disabled:opacity-30 disabled:pointer-events-none"
             >
               <ChevronRight className="w-4 h-4" />
             </button>

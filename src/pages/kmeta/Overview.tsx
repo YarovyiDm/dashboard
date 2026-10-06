@@ -1,23 +1,31 @@
 import { useMemo } from 'react';
-import { Users, Crown, UserPlus, LogIn, BookOpen, Layers, GraduationCap, DollarSign, Globe, Calendar, UserCheck, Flag, Tag, Activity, Bell, Eye } from 'lucide-react';
-import { StatCard } from '../../components/StatCard';
+import {
+  Users, Crown, UserPlus, BookOpen, Layers, GraduationCap, Wallet, Globe, Calendar, UserCheck, Flag, Tag,
+  Activity, Bell, Eye, TrendingUp, PieChart, Megaphone, Search, Sparkles, CalendarRange, Radio,
+} from 'lucide-react';
 import {
   useKmetaUsers, useKmetaSubcounts, useKmetaRevenue, isKmetaPro, kmetaEffectiveStatus,
   useKmetaPublicProfiles, useKmetaBookingRequests, useKmetaPageReports, useKmetaConvertedTrials,
-  kmetaAcquisitionChannel, useKmetaPushTutors, type KmetaChannel,
+  kmetaAcquisitionChannel, useKmetaPushTutors, LEGACY_PRO_PAYMENTS, type KmetaChannel,
 } from '../../hooks/useKmetaData';
 import { toDayMonth, toJsDate } from '../../lib/date';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { usePersistentState } from '../../hooks/usePersistentState';
+import {
+  PageHeader, SectionLabel, Panel, Kpi, StackBar, BarList, MiniStat, ConnectGate, LoadingSkeleton,
+  AnimatedNumber,
+} from './ui';
+import { fmt, GOLD, TEAL } from './theme';
 
 const PRO_PRICE = 149;
-// Pro payments made before subscriptionPayments logging existed — they have no
-// records in the DB, so they're added as a fixed legacy baseline.
-// TODO: drop once these are backfilled into subscriptionPayments.
-const LEGACY_PRO_PAYMENTS = 4;
 // Of each 149 UAH charge, this much reaches the account after WayForPay's fee.
 const WAYFORPAY_PAYOUT_RATIO = 146 / 149;
 // 5% ФОП single tax + 1% військовий збір.
 const TOTAL_TAX = 0.06;
+
+const RANGES = [7, 30, 90] as const;
+type Range = typeof RANGES[number];
+const isRange = (v: unknown): v is Range => RANGES.includes(v as Range);
 
 export function KmetaOverview() {
   const { users, loading, connected, connect, error } = useKmetaUsers();
@@ -28,6 +36,7 @@ export function KmetaOverview() {
   const { reports } = useKmetaPageReports(connected);
   const { count: convertedTrials, available: convertedAvailable } = useKmetaConvertedTrials(connected);
   const { uids: pushUids } = useKmetaPushTutors(connected);
+  const [range, setRange] = usePersistentState<Range>('kmeta.overview.range', 30, isRange);
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -49,7 +58,7 @@ export function KmetaOverview() {
   const chartData = useMemo(() => {
     const days: Record<string, number> = {};
     const now = new Date();
-    for (let i = 29; i >= 0; i--) {
+    for (let i = range - 1; i >= 0; i--) {
       const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
       days[d.toISOString().slice(0, 10)] = 0;
     }
@@ -61,7 +70,7 @@ export function KmetaOverview() {
       }
     });
     return Object.entries(days).map(([date, count]) => ({ date: toDayMonth(date), count }));
-  }, [users]);
+  }, [users, range]);
 
   // Subscription revenue from the collection-group read, split by currency and
   // new vs renewal, plus the fixed legacy UAH baseline for pre-logging payments.
@@ -189,309 +198,242 @@ export function KmetaOverview() {
     return [...m.entries()].map(([month, v]) => ({ month, ...v })).sort((a, b) => a.month.localeCompare(b.month));
   }, [users]);
 
-  if (!connected) {
-    return (
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary mb-6">Kmeta Overview</h1>
-        <div className="bg-surface-card border border-border rounded-xl p-6 max-w-md">
-          <p className="text-text-secondary mb-4">
-            kmeta — окремий Firebase-проект. Підключи його, щоб побачити дані
-            (окрема авторизація Google, потрібна один раз).
-          </p>
-          <button
-            onClick={connect}
-            className="inline-flex items-center gap-2 bg-accent hover:bg-accent-light text-white px-5 py-2.5 rounded-lg font-medium transition-colors"
-          >
-            <LogIn className="w-4 h-4" />
-            Підключити kmeta
-          </button>
-          {error && <p className="text-red text-sm mt-3">{error}</p>}
-        </div>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return <div className="text-text-muted">Loading...</div>;
-  }
-
-  if (error) {
-    return (
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary mb-6">Kmeta Overview</h1>
-        <div className="bg-surface-card border border-border rounded-xl p-6 max-w-md">
-          <p className="text-red text-sm mb-4">{error}</p>
-          <button
-            onClick={connect}
-            className="inline-flex items-center gap-2 bg-accent hover:bg-accent-light text-white px-5 py-2.5 rounded-lg font-medium transition-colors"
-          >
-            <LogIn className="w-4 h-4" />
-            Спробувати ще
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (!connected) return <ConnectGate title="Overview" error={error} onConnect={connect} />;
+  if (loading) return <LoadingSkeleton />;
+  if (error) return <ConnectGate title="Overview" error={error} onConnect={connect} retry />;
 
   const total = (n: number): string | number => (!countsAvailable ? '—' : countsLoading ? '…' : n);
   const createdPages = users.filter(u => u.publicSlug).length;
   const publishedPages = (profiles ?? []).filter(p => p.enabled).length;
   const pushOn = pushUids ? users.filter(u => pushUids.has(u.uid)).length : null;
+  const proRate = stats.totalUsers ? Math.round((stats.proUsers / stats.totalUsers) * 1000) / 10 : 0;
+  const rangeTotal = chartData.reduce((s, d) => s + d.count, 0);
+  const acceptRate = bookingStats.total ? Math.round((bookingStats.accepted / bookingStats.total) * 100) : 0;
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-text-primary mb-6">Kmeta Overview</h1>
+    <div className="max-w-7xl">
+      <PageHeader
+        title="Overview"
+        subtitle={<>{stats.totalUsers} tutors · оновлено {new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}</>}
+      />
 
-      {/* Users summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-        <StatCard label="Total Users" value={stats.totalUsers} icon={<Users className="w-5 h-5" />} />
-        <StatCard label="Active Pro" value={stats.proUsers} icon={<Crown className="w-5 h-5" />} />
-        <StatCard label="New this week" value={stats.newThisWeek} icon={<UserPlus className="w-5 h-5" />} />
+      {/* Headline KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Kpi i={0} label="Total users" value={stats.totalUsers} icon={<Users />} tone="teal" />
+        <Kpi i={1} label="Active Pro" value={stats.proUsers} icon={<Crown />} tone="gold" hint={`${proRate}% конверсія`} />
+        <Kpi i={2} label="New this week" value={stats.newThisWeek} icon={<UserPlus />} tone="green" />
+        <Kpi i={3} label="Active 7d" value={engagement.active7} icon={<Activity />} tone="blue" hint={`${engagement.active30} за 30 днів`} />
       </div>
 
-      {/* Subscription revenue: logged payments + legacy baseline */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-        <div className="bg-surface-card border border-border rounded-xl p-5">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-text-secondary text-sm">Revenue</span>
-            <span className="text-text-muted"><DollarSign className="w-5 h-5" /></span>
+      {/* Revenue + plan split */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4 mt-3 sm:mt-4">
+        <Panel i={4} gold className="lg:col-span-3" title="Revenue" icon={<Wallet className="w-4 h-4" />}
+          right={<span>{revenue.paymentsCount} оплат</span>}>
+          <div className="grid sm:grid-cols-2 gap-5">
+            <div>
+              <div className="text-xs text-text-muted mb-1">Gross</div>
+              <div className="text-3xl sm:text-4xl font-extrabold tracking-tight text-accent leading-none">
+                <AnimatedNumber value={revenue.uahGross} /> <span className="text-lg font-bold text-accent/70">UAH</span>
+              </div>
+              {revenue.eur > 0 && <div className="text-sm font-semibold text-text-primary mt-2">+ {fmt(revenue.eur)} EUR</div>}
+            </div>
+            <div className="sm:border-l sm:border-border sm:pl-5">
+              <div className="text-xs text-text-muted mb-1">Net (after fees & tax)</div>
+              <div className="text-2xl sm:text-3xl font-extrabold tracking-tight text-green leading-none">
+                <AnimatedNumber value={revenue.uahNet} /> <span className="text-base font-bold text-green/70">UAH</span>
+              </div>
+              <div className="text-[11px] text-text-muted mt-2">WayForPay 146/149 · −5% ФОП −1% ЗЗ</div>
+            </div>
           </div>
-          <div className="text-2xl font-semibold text-text-primary">
-            {Math.round(revenue.uahGross).toLocaleString()} UAH{revenue.eur > 0 ? ` · ${Math.round(revenue.eur).toLocaleString()} EUR` : ''}
+          <div className="flex flex-wrap gap-2 mt-5">
+            {[
+              [`${revenue.newCount} нові`, 'bg-accent/10 text-accent'],
+              [`${revenue.renewals} продовж.`, 'bg-green/10 text-green'],
+              [`${LEGACY_PRO_PAYMENTS} legacy`, 'bg-surface-hover text-text-muted'],
+            ].map(([t, c]) => <span key={t} className={`px-2.5 py-1 rounded-full text-xs font-semibold ${c}`}>{t}</span>)}
           </div>
-          <div className="mt-2 text-xs text-text-muted">
-            {revenue.paymentsCount} оплат · {revenue.newCount} нові / {revenue.renewals} продовж. · {LEGACY_PRO_PAYMENTS} legacy
-          </div>
-        </div>
-        <div className="bg-surface-card border border-border rounded-xl p-5">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-text-secondary text-sm">Net UAH (after fees & tax)</span>
-          </div>
-          <div className="text-2xl font-semibold text-green">{Math.round(revenue.uahNet).toLocaleString()} UAH</div>
-          <div className="mt-2 text-xs text-text-muted">
-            WayForPay 146/149 · −5% ФОП −1% ЗЗ
-          </div>
-        </div>
+        </Panel>
+        <Panel i={5} className="lg:col-span-2" title="Subscription status" icon={<PieChart className="w-4 h-4" />}>
+          <StackBar segments={[
+            { label: 'Pro', value: stats.statusCounts.pro, color: GOLD },
+            { label: 'Pro ending', value: stats.statusCounts.pro_ending, color: '#5cb8ff' },
+            { label: 'Cancelled', value: stats.statusCounts.cancelled, color: '#ff6b6b' },
+            { label: 'Free', value: stats.statusCounts.free, color: '#3a5257' },
+          ]} />
+        </Panel>
       </div>
 
-      {/* Activity totals across all tutors */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-        <StatCard label="Lessons" value={total(totals.lessons)} icon={<BookOpen className="w-5 h-5" />} />
-        <StatCard label="Groups" value={total(totals.groups)} icon={<Layers className="w-5 h-5" />} />
-        <StatCard label="Students" value={total(totals.students)} icon={<GraduationCap className="w-5 h-5" />} />
+      {/* Registrations chart */}
+      <Panel i={6} className="mt-3 sm:mt-4" title="New registrations" icon={<TrendingUp className="w-4 h-4" />}
+        right={
+          <div className="flex bg-surface rounded-lg p-0.5 border border-border">
+            {RANGES.map(r => (
+              <button key={r} onClick={() => setRange(r)}
+                className={`k-chip px-2.5 py-1 rounded-md text-xs font-semibold ${range === r ? 'bg-accent text-[#1d1503]' : 'text-text-muted hover:text-text-primary'}`}>
+                {r}d
+              </button>
+            ))}
+          </div>
+        }>
+        <div className="flex items-baseline gap-2 -mt-1 mb-3">
+          <span className="text-2xl font-extrabold text-text-primary"><AnimatedNumber value={rangeTotal} /></span>
+          <span className="text-xs text-text-muted">за {range} днів</span>
+        </div>
+        <div className="-mx-2 sm:mx-0">
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={chartData} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
+              <defs>
+                <linearGradient id="kmetaGold" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={GOLD} stopOpacity={0.45} />
+                  <stop offset="100%" stopColor={GOLD} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} stroke="#1c3035" strokeDasharray="3 6" />
+              <XAxis dataKey="date" tick={{ fill: '#6a8783', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={18} />
+              <YAxis tick={{ fill: '#6a8783', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip
+                cursor={{ stroke: GOLD, strokeOpacity: 0.35, strokeDasharray: '3 3' }}
+                contentStyle={{ background: '#0e1a1d', border: '1px solid #1c3035', borderRadius: 12, color: '#ecf3f1', boxShadow: '0 12px 30px -10px rgba(0,0,0,.7)' }}
+                labelStyle={{ color: '#a3b8b4', fontSize: 12 }}
+                itemStyle={{ color: GOLD, fontWeight: 700 }}
+                formatter={(v) => [v, 'sign-ups']}
+              />
+              <Area type="monotone" dataKey="count" stroke={GOLD} fill="url(#kmetaGold)" strokeWidth={2.5}
+                activeDot={{ r: 5, fill: GOLD, stroke: '#081113', strokeWidth: 2 }} animationDuration={900} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </Panel>
+
+      {/* Product activity */}
+      <SectionLabel i={7}>Activity</SectionLabel>
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <Kpi i={8} compact label="Lessons" value={total(totals.lessons)} icon={<BookOpen />} tone="teal" />
+        <Kpi i={9} compact label="Groups" value={total(totals.groups)} icon={<Layers />} tone="teal" />
+        <Kpi i={10} compact label="Students" value={total(totals.students)} icon={<GraduationCap />} tone="teal" />
       </div>
       {!countsAvailable && (
-        <p className="text-xs text-text-muted mb-8">
+        <p className="text-xs text-text-muted mt-3">
           Уроки / групи / студенти недоступні — треба дозволити адміну <code>read</code> підколекцій
           у Firestore rules kmeta (isAdmin на <code>{'/users/{uid}/{document=**}'}</code>).
         </p>
       )}
-      {countsAvailable && <div className="mb-4" />}
-
-      {/* Plan breakdown */}
-      <div className="bg-surface-card border border-border rounded-xl p-5 mb-8">
-        <h2 className="text-sm text-text-secondary mb-3">Subscription status</h2>
-        <div className="flex flex-wrap gap-x-8 gap-y-4">
-          <div>
-            <div className="text-lg font-semibold text-text-primary">{stats.statusCounts.free}</div>
-            <div className="text-xs text-text-muted">Free</div>
-          </div>
-          <div>
-            <div className="text-lg font-semibold text-amber">{stats.statusCounts.pro}</div>
-            <div className="text-xs text-text-muted">Pro</div>
-          </div>
-          <div>
-            <div className="text-lg font-semibold text-blue">{stats.statusCounts.pro_ending}</div>
-            <div className="text-xs text-text-muted">Pro ending</div>
-          </div>
-          <div>
-            <div className="text-lg font-semibold text-red">{stats.statusCounts.cancelled}</div>
-            <div className="text-xs text-text-muted">Cancelled</div>
-          </div>
-        </div>
-      </div>
 
       {/* Booking pages + trial requests + page reports */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-        <StatCard label="Booking pages" value={createdPages} icon={<Globe className="w-5 h-5" />} />
-        <StatCard label="Published" value={publishedPages} icon={<Globe className="w-5 h-5" />} />
-        <StatCard label="Trial requests" value={bookingStats.total} icon={<Calendar className="w-5 h-5" />} />
-        <StatCard label="Became students" value={convertedAvailable && convertedTrials !== null ? convertedTrials : '—'} icon={<UserCheck className="w-5 h-5" />} />
+      <SectionLabel i={11}>Booking</SectionLabel>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Kpi i={12} label="Booking pages" value={createdPages} icon={<Globe />} tone="muted" />
+        <Kpi i={13} label="Published" value={publishedPages} icon={<Radio />} tone="green" />
+        <Kpi i={14} label="Trial requests" value={bookingStats.total} icon={<Calendar />} tone="blue" />
+        <Kpi i={15} label="Became students" value={convertedAvailable && convertedTrials !== null ? convertedTrials : '—'} icon={<UserCheck />} tone="gold" />
       </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-        <div className="bg-surface-card border border-border rounded-xl p-5">
-          <h2 className="text-sm text-text-secondary mb-3">Trial requests</h2>
-          <div className="flex flex-wrap gap-x-8 gap-y-4">
-            <div>
-              <div className="text-lg font-semibold text-blue">{bookingStats.new}</div>
-              <div className="text-xs text-text-muted">New</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-green">{bookingStats.accepted}</div>
-              <div className="text-xs text-text-muted">Accepted</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-text-muted">{bookingStats.declined}</div>
-              <div className="text-xs text-text-muted">Declined</div>
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mt-3 sm:mt-4">
+        <Panel i={16} title="Trial requests" icon={<Calendar className="w-4 h-4" />} right={bookingStats.total ? `${acceptRate}% прийнято` : undefined}>
+          <StackBar segments={[
+            { label: 'New', value: bookingStats.new, color: '#5cb8ff' },
+            { label: 'Accepted', value: bookingStats.accepted, color: '#3ddc97' },
+            { label: 'Declined', value: bookingStats.declined, color: '#3a5257' },
+          ]} />
+        </Panel>
+        <Panel i={17} title="Page reports" icon={<Flag className="w-4 h-4" />}
+          right={reportStats.newCount > 0 ? <span className="px-2 py-0.5 bg-red/15 text-red rounded-full text-xs font-bold">{reportStats.newCount} new</span> : undefined}
+          className={reportStats.newCount > 0 ? 'ring-1 ring-red/25' : ''}>
+          <div className="grid grid-cols-3 gap-4">
+            <MiniStat label="Total" value={reportStats.total} />
+            <MiniStat label="Unreviewed" value={reportStats.newCount} className={reportStats.newCount > 0 ? 'text-red' : 'text-text-primary'} />
+            <MiniStat label="Tutors" value={reportStats.tutors} />
           </div>
-        </div>
-        <div className="bg-surface-card border border-border rounded-xl p-5">
-          <h2 className="text-sm text-text-secondary mb-3 flex items-center gap-2">
-            <Flag className="w-4 h-4" /> Page reports
-            {reportStats.newCount > 0 && (
-              <span className="px-1.5 py-0.5 bg-red/15 text-red rounded text-xs font-medium">{reportStats.newCount} new</span>
-            )}
-          </h2>
-          <div className="flex flex-wrap gap-x-8 gap-y-4">
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{reportStats.total}</div>
-              <div className="text-xs text-text-muted">Total</div>
-            </div>
-            <div>
-              <div className={`text-lg font-semibold ${reportStats.newCount > 0 ? 'text-red' : 'text-text-primary'}`}>{reportStats.newCount}</div>
-              <div className="text-xs text-text-muted">New (unreviewed)</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{reportStats.tutors}</div>
-              <div className="text-xs text-text-muted">Tutors with reports</div>
-            </div>
-          </div>
-        </div>
+        </Panel>
       </div>
 
       {/* Acquisition */}
-      <div className="bg-surface-card border border-border rounded-xl p-5 mb-4">
-        <h2 className="text-sm text-text-secondary mb-3">Acquisition</h2>
-        <div className="flex flex-wrap gap-x-8 gap-y-4">
-          <div>
-            <div className="text-lg font-semibold text-blue">{acq.channels.ads}</div>
-            <div className="text-xs text-text-muted">Google Ads</div>
-          </div>
-          <div>
-            <div className="text-lg font-semibold text-green">{acq.channels.organic}</div>
-            <div className="text-xs text-text-muted">Organic</div>
-          </div>
-          <div>
-            <div className="text-lg font-semibold text-text-primary">{acq.channels.direct}</div>
-            <div className="text-xs text-text-muted">Direct</div>
-          </div>
-          {acq.channels.unknown > 0 && (
-            <div>
-              <div className="text-lg font-semibold text-text-muted">{acq.channels.unknown}</div>
-              <div className="text-xs text-text-muted">Unknown</div>
-            </div>
-          )}
-        </div>
-      </div>
-
+      <SectionLabel i={18}>Acquisition</SectionLabel>
+      <Panel i={19} title="Channels" icon={<Megaphone className="w-4 h-4" />}>
+        <StackBar segments={[
+          { label: 'Google Ads', value: acq.channels.ads, color: '#5cb8ff' },
+          { label: 'Organic', value: acq.channels.organic, color: '#3ddc97' },
+          { label: 'Direct', value: acq.channels.direct, color: TEAL },
+          ...(acq.channels.unknown > 0 ? [{ label: 'Unknown', value: acq.channels.unknown, color: '#3a5257' }] : []),
+        ]} />
+      </Panel>
       {(acq.topCampaigns.length > 0 || acq.topTerms.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mt-3 sm:mt-4">
           {acq.topCampaigns.length > 0 && (
-            <div className="bg-surface-card border border-border rounded-xl p-5">
-              <h2 className="text-sm text-text-secondary mb-3">Top campaigns (sign-ups / Pro)</h2>
-              <div className="space-y-1.5">
-                {acq.topCampaigns.map(c => (
-                  <div key={c.name} className="flex items-center justify-between text-sm gap-3">
-                    <span className="text-text-primary font-mono text-xs truncate">{c.name}</span>
-                    <span className="text-text-secondary shrink-0">{c.signups} / <span className="text-amber">{c.pro}</span></span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <Panel i={20} title="Top campaigns" icon={<Megaphone className="w-4 h-4" />} right="sign-ups / Pro">
+              <BarList mono color="#5cb8ff" rows={acq.topCampaigns.map(c => ({
+                key: c.name, label: c.name, value: c.signups,
+                extra: <>{c.signups} <span className="text-text-muted">/</span> <span className="text-accent">{c.pro}</span></>,
+              }))} />
+            </Panel>
           )}
           {acq.topTerms.length > 0 && (
-            <div className="bg-surface-card border border-border rounded-xl p-5">
-              <h2 className="text-sm text-text-secondary mb-3">Top keywords (sign-ups / Pro)</h2>
-              <div className="space-y-1.5">
-                {acq.topTerms.map(t => (
-                  <div key={t.name} className="flex items-center justify-between text-sm gap-3">
-                    <span className="text-text-primary truncate">{t.name}</span>
-                    <span className="text-text-secondary shrink-0">{t.signups} / <span className="text-amber">{t.pro}</span></span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <Panel i={21} title="Top keywords" icon={<Search className="w-4 h-4" />} right="sign-ups / Pro">
+              <BarList color="#5cb8ff" rows={acq.topTerms.map(t => ({
+                key: t.name, label: t.name, value: t.signups,
+                extra: <>{t.signups} <span className="text-text-muted">/</span> <span className="text-accent">{t.pro}</span></>,
+              }))} />
+            </Panel>
           )}
         </div>
       )}
 
       {/* Tagged links — where visitors come from */}
-      <div className="bg-surface-card border border-border rounded-xl p-5 mb-4">
-        <h2 className="text-sm text-text-secondary mb-3 flex items-center justify-between">
-          <span className="flex items-center gap-2"><Tag className="w-4 h-4" /> Tagged links</span>
-          <span className="text-xs text-text-muted">{sources.tutorsWithTags} tutors using tags</span>
-        </h2>
+      <Panel i={22} className="mt-3 sm:mt-4" title="Tagged links" icon={<Tag className="w-4 h-4" />} right={`${sources.tutorsWithTags} tutors using tags`}>
         {sources.rows.length > 0 ? (
-          <div>
-            <div className="flex text-xs text-text-muted pb-1.5">
+          <div className="-mx-1">
+            <div className="flex text-[11px] uppercase tracking-wider text-text-muted px-1 pb-2">
               <span className="flex-1">Source</span>
-              <span className="w-24 text-right">Visits</span>
-              <span className="w-24 text-right">Requests</span>
+              <span className="w-16 sm:w-24 text-right">Visits</span>
+              <span className="w-20 sm:w-24 text-right">Requests</span>
             </div>
             {sources.rows.map(r => (
-              <div key={r.src} className="flex text-sm py-1 border-t border-border">
-                <span className="flex-1 text-text-primary truncate">{r.label}</span>
-                <span className="w-24 text-right text-text-secondary">{r.visits}</span>
-                <span className="w-24 text-right text-text-secondary">{r.requests}</span>
+              <div key={r.src} className="flex items-center text-sm px-1 py-2 border-t border-border/70">
+                <span className="flex-1 text-text-primary truncate pr-2">{r.label}</span>
+                <span className="w-16 sm:w-24 text-right text-text-secondary tabular-nums">{r.visits}</span>
+                <span className="w-20 sm:w-24 text-right font-semibold text-accent tabular-nums">{r.requests}</span>
               </div>
             ))}
           </div>
         ) : (
           <div className="text-sm text-text-muted">No tagged-link data yet</div>
         )}
-      </div>
+      </Panel>
 
       {/* Engagement */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-        <StatCard label="Active 7d" value={engagement.active7} icon={<Activity className="w-5 h-5" />} />
-        <StatCard label="Active 30d" value={engagement.active30} icon={<Activity className="w-5 h-5" />} />
-        <StatCard label="Push on" value={pushOn ?? '—'} icon={<Bell className="w-5 h-5" />} />
-        <StatCard label="Paywall views" value={engagement.paywall} icon={<Eye className="w-5 h-5" />} />
+      <SectionLabel i={23}>Engagement</SectionLabel>
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <Kpi i={24} compact label="Active 30d" value={engagement.active30} icon={<Activity />} tone="blue" />
+        <Kpi i={25} compact label="Push on" value={pushOn ?? '—'} icon={<Bell />} tone="green" />
+        <Kpi i={26} compact label="Paywall views" value={engagement.paywall} icon={<Eye />} tone="gold" />
       </div>
 
-      {/* What's new + cohorts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        <div className="bg-surface-card border border-border rounded-xl p-5">
-          <h2 className="text-sm text-text-secondary mb-3">What's new (opened / more / dismissed)</h2>
-          {whatsNew.length > 0 ? whatsNew.map(w => (
-            <div key={w.id} className="flex items-center justify-between text-sm py-1 border-t border-border first:border-0">
-              <span className="text-text-primary truncate mr-3">{w.id}</span>
-              <span className="text-text-secondary shrink-0">{w.opened} / {w.more} / {w.dismissed}</span>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mt-3 sm:mt-4 mb-4">
+        <Panel i={27} title="What's new" icon={<Sparkles className="w-4 h-4" />}>
+          {whatsNew.length > 0 ? (
+            <div className="-mx-1">
+              <div className="flex text-[11px] uppercase tracking-wider text-text-muted px-1 pb-2">
+                <span className="flex-1">Update</span>
+                <span className="w-14 text-right">Opened</span>
+                <span className="w-14 text-right">More</span>
+                <span className="w-16 text-right">Dismiss</span>
+              </div>
+              {whatsNew.map(w => (
+                <div key={w.id} className="flex items-center text-sm px-1 py-2 border-t border-border/70">
+                  <span className="flex-1 text-text-primary truncate pr-2">{w.id}</span>
+                  <span className="w-14 text-right text-text-secondary tabular-nums">{w.opened}</span>
+                  <span className="w-14 text-right font-semibold text-green tabular-nums">{w.more}</span>
+                  <span className="w-16 text-right text-text-muted tabular-nums">{w.dismissed}</span>
+                </div>
+              ))}
             </div>
-          )) : <div className="text-sm text-text-muted">No data</div>}
-        </div>
-        <div className="bg-surface-card border border-border rounded-xl p-5">
-          <h2 className="text-sm text-text-secondary mb-3">Cohorts by month (sign-ups / Pro)</h2>
-          {cohorts.length > 0 ? cohorts.map(c => (
-            <div key={c.month} className="flex items-center justify-between text-sm py-1 border-t border-border first:border-0">
-              <span className="text-text-primary">{c.month}</span>
-              <span className="text-text-secondary">{c.signups} / <span className="text-amber">{c.pro}</span></span>
-            </div>
-          )) : <div className="text-sm text-text-muted">No data</div>}
-        </div>
-      </div>
-
-      {/* Registrations chart */}
-      <div className="bg-surface-card border border-border rounded-xl p-5 mb-8">
-        <h2 className="text-sm text-text-secondary mb-4">New Registrations (30 days)</h2>
-        <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={chartData}>
-            <defs>
-              <linearGradient id="colorCountKmeta" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip
-              contentStyle={{ background: '#1a1d27', border: '1px solid #2a2e3a', borderRadius: 8, color: '#f1f5f9' }}
-            />
-            <Area type="monotone" dataKey="count" stroke="#6366f1" fill="url(#colorCountKmeta)" strokeWidth={2} />
-          </AreaChart>
-        </ResponsiveContainer>
+          ) : <div className="text-sm text-text-muted">No data</div>}
+        </Panel>
+        <Panel i={28} title="Cohorts by month" icon={<CalendarRange className="w-4 h-4" />} right="sign-ups / Pro">
+          <BarList color={TEAL} rows={[...cohorts].reverse().map(c => ({
+            key: c.month, label: c.month, value: c.signups,
+            extra: <>{c.signups} <span className="text-text-muted">/</span> <span className="text-accent">{c.pro}</span></>,
+          }))} />
+        </Panel>
       </div>
     </div>
   );

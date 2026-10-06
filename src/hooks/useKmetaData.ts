@@ -106,7 +106,7 @@ const STATUS_TONE: Record<KmetaStatus, string> = {
 
 // Pill classes for an effective status (shared by Overview, Users, detail).
 export function statusBadgeClass(s: KmetaStatus): string {
-  return `inline-block px-1.5 py-0.5 rounded text-xs ${STATUS_TONE[s]}`;
+  return `inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-semibold ${STATUS_TONE[s]}`;
 }
 
 // Back-compat: a pill for the raw `plan` value.
@@ -310,6 +310,11 @@ export interface KmetaSubPayment {
   isRenewal?: boolean;
   provider?: string;       // 'creem' (RO)
 }
+
+// Pro payments made before subscriptionPayments logging existed — they have no
+// records in the DB, so they're added as a fixed legacy baseline.
+// TODO: drop once these are backfilled into subscriptionPayments.
+export const LEGACY_PRO_PAYMENTS = 4;
 
 // All subscription payments across every tutor, in one collection-group read.
 // Compute totals (by currency, new vs renewal, by period) from the returned list.
