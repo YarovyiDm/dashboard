@@ -4,11 +4,29 @@ import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from
 import { kmetaDb, kmetaAuth } from '../lib/firebase';
 import { toJsDate } from '../lib/date';
 
+export interface KmetaAcquisition {
+  source?: string;
+  referrer?: string;
+  landingPage?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  utmContent?: string;
+  utmTerm?: string;
+  gclid?: string;
+  deviceType?: string;      // 'mobile' | 'tablet' | 'desktop'
+  capturedAt?: string;
+  lastTouch?: KmetaAcquisition;
+}
+
+export type KmetaChannel = 'ads' | 'organic' | 'direct' | 'unknown';
+
 export interface KmetaUser {
   uid: string;
   email: string;
   name: string;
   photoURL?: string;
+  acquisition?: KmetaAcquisition;
   // Firestore Timestamp on kmeta (kroky stores an ISO string); normalize via toJsDate.
   createdAt?: unknown;
   plan?: string;            // 'free' | 'pro' | 'cancelled'
@@ -44,6 +62,23 @@ export function isKmetaPro(u: KmetaUser): boolean {
   const s = kmetaEffectiveStatus(u);
   return s === 'pro' || s === 'pro_ending';
 }
+
+// Acquisition channel, derived like the app: Google Ads (gclid / cpc),
+// organic (utmSource or a referrer, no gclid), direct, or unknown (no data).
+export function kmetaAcquisitionChannel(u: KmetaUser): KmetaChannel {
+  const a = u.acquisition;
+  if (!a) return 'unknown';
+  if (a.gclid || a.utmMedium === 'cpc') return 'ads';
+  if (a.utmSource || (a.referrer && a.referrer.length > 0)) return 'organic';
+  return 'direct';
+}
+
+export const KMETA_CHANNEL_LABEL: Record<KmetaChannel, string> = {
+  ads: 'Google Ads',
+  organic: 'Organic',
+  direct: 'Direct',
+  unknown: 'Unknown',
+};
 
 export const KMETA_STATUS_LABEL: Record<KmetaStatus, string> = {
   free: 'Free',

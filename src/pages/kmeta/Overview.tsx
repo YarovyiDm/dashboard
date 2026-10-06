@@ -4,6 +4,7 @@ import { StatCard } from '../../components/StatCard';
 import {
   useKmetaUsers, useKmetaSubcounts, useKmetaRevenue, isKmetaPro, kmetaEffectiveStatus,
   useKmetaPublicProfiles, useKmetaBookingRequests, useKmetaPageReports, useKmetaConvertedTrials,
+  kmetaAcquisitionChannel, type KmetaChannel,
 } from '../../hooks/useKmetaData';
 import { toDayMonth, toJsDate } from '../../lib/date';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -101,6 +102,27 @@ export function KmetaOverview() {
       tutors: new Set(list.map(r => r.uid || r.slug)).size,
     };
   }, [reports]);
+
+  const acq = useMemo(() => {
+    const channels: Record<KmetaChannel, number> = { ads: 0, organic: 0, direct: 0, unknown: 0 };
+    const byCampaign = new Map<string, { signups: number; pro: number }>();
+    const byTerm = new Map<string, { signups: number; pro: number }>();
+    const bump = (m: Map<string, { signups: number; pro: number }>, key: string | undefined, pro: boolean) => {
+      if (!key) return;
+      const e = m.get(key) || { signups: 0, pro: 0 };
+      e.signups++; if (pro) e.pro++;
+      m.set(key, e);
+    };
+    users.forEach(u => {
+      channels[kmetaAcquisitionChannel(u)]++;
+      const pro = isKmetaPro(u);
+      bump(byCampaign, u.acquisition?.utmCampaign, pro);
+      bump(byTerm, u.acquisition?.utmTerm, pro);
+    });
+    const top = (m: Map<string, { signups: number; pro: number }>) =>
+      [...m.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.signups - a.signups).slice(0, 8);
+    return { channels, topCampaigns: top(byCampaign), topTerms: top(byTerm) };
+  }, [users]);
 
   if (!connected) {
     return (
@@ -272,6 +294,62 @@ export function KmetaOverview() {
           </div>
         </div>
       </div>
+
+      {/* Acquisition */}
+      <div className="bg-surface-card border border-border rounded-xl p-5 mb-4">
+        <h2 className="text-sm text-text-secondary mb-3">Acquisition</h2>
+        <div className="flex flex-wrap gap-x-8 gap-y-4">
+          <div>
+            <div className="text-lg font-semibold text-blue">{acq.channels.ads}</div>
+            <div className="text-xs text-text-muted">Google Ads</div>
+          </div>
+          <div>
+            <div className="text-lg font-semibold text-green">{acq.channels.organic}</div>
+            <div className="text-xs text-text-muted">Organic</div>
+          </div>
+          <div>
+            <div className="text-lg font-semibold text-text-primary">{acq.channels.direct}</div>
+            <div className="text-xs text-text-muted">Direct</div>
+          </div>
+          {acq.channels.unknown > 0 && (
+            <div>
+              <div className="text-lg font-semibold text-text-muted">{acq.channels.unknown}</div>
+              <div className="text-xs text-text-muted">Unknown</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {(acq.topCampaigns.length > 0 || acq.topTerms.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          {acq.topCampaigns.length > 0 && (
+            <div className="bg-surface-card border border-border rounded-xl p-5">
+              <h2 className="text-sm text-text-secondary mb-3">Top campaigns (sign-ups / Pro)</h2>
+              <div className="space-y-1.5">
+                {acq.topCampaigns.map(c => (
+                  <div key={c.name} className="flex items-center justify-between text-sm gap-3">
+                    <span className="text-text-primary font-mono text-xs truncate">{c.name}</span>
+                    <span className="text-text-secondary shrink-0">{c.signups} / <span className="text-amber">{c.pro}</span></span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {acq.topTerms.length > 0 && (
+            <div className="bg-surface-card border border-border rounded-xl p-5">
+              <h2 className="text-sm text-text-secondary mb-3">Top keywords (sign-ups / Pro)</h2>
+              <div className="space-y-1.5">
+                {acq.topTerms.map(t => (
+                  <div key={t.name} className="flex items-center justify-between text-sm gap-3">
+                    <span className="text-text-primary truncate">{t.name}</span>
+                    <span className="text-text-secondary shrink-0">{t.signups} / <span className="text-amber">{t.pro}</span></span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Registrations chart */}
       <div className="bg-surface-card border border-border rounded-xl p-5 mb-8">

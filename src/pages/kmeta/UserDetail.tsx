@@ -4,7 +4,8 @@ import { ArrowLeft, LogIn, GraduationCap, Layers, BookOpen, CreditCard, External
 import {
   useKmetaUsers, useKmetaTutorCounts, useKmetaTutorSubscriptions, kmetaEffectiveStatus,
   KMETA_STATUS_LABEL, statusBadgeClass, useKmetaTutorPublicProfile, useKmetaTutorBookingRequests,
-  useKmetaTutorReports, type KmetaPageReport, type KmetaPublicProfile,
+  useKmetaTutorReports, kmetaAcquisitionChannel, KMETA_CHANNEL_LABEL,
+  type KmetaPageReport, type KmetaPublicProfile,
 } from '../../hooks/useKmetaData';
 import { toJsDate } from '../../lib/date';
 
@@ -184,6 +185,8 @@ export function KmetaUserDetail() {
     else if (r.status === 'declined') req.declined++;
   });
   const newReports = (reports ?? []).filter(r => (r.status || 'new') === 'new').length;
+  const a = user.acquisition;
+  const channel = kmetaAcquisitionChannel(user);
 
   return (
     <div>
@@ -256,6 +259,20 @@ export function KmetaUserDetail() {
           ) : (
             <Row label="Page" value="No page" />
           )}
+        </Block>
+
+        <Block title="Acquisition">
+          <Row label="Channel" value={<span className={channel === 'ads' ? 'text-blue' : channel === 'organic' ? 'text-green' : 'text-text-secondary'}>{KMETA_CHANNEL_LABEL[channel]}</span>} />
+          <Row label="Source" value={a?.source || '—'} />
+          <Row label="Medium" value={a?.utmMedium || '—'} />
+          <Row label="Campaign" value={a?.utmCampaign || '—'} />
+          <Row label="Keyword" value={a?.utmTerm || '—'} />
+          <Row label="Google Ads" value={a?.gclid ? 'Yes' : 'No'} />
+          <Row label="Landing" value={<span className="text-xs break-all">{a?.landingPage || '—'}</span>} />
+          <Row label="Referrer" value={<span className="text-xs break-all">{a?.referrer || '—'}</span>} />
+          <Row label="Device" value={a?.deviceType || '—'} />
+          <Row label="First visit" value={fmtDateTime(a?.capturedAt)} />
+          {a?.lastTouch && <Row label="Last touch" value={`${a.lastTouch.source || '—'} · ${a.lastTouch.utmCampaign || '—'}`} />}
         </Block>
       </div>
 
