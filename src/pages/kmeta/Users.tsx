@@ -8,8 +8,8 @@ import {
 } from '../../hooks/useKmetaData';
 import { toDayMonthYear, toJsDate } from '../../lib/date';
 import { usePersistentState, oneOf } from '../../hooks/usePersistentState';
-import { PageHeader, ConnectGate, LoadingSkeleton, Avatar } from './ui';
-import { stagger } from './theme';
+import { PageHeader, ConnectGate, LoadingSkeleton, Avatar } from '../../components/ui';
+import { stagger } from '../../lib/theme';
 
 const SITE = 'https://kmeta.com.ua';
 
@@ -215,6 +215,7 @@ export function KmetaUsers() {
   return (
     <div className="max-w-7xl">
       <PageHeader
+        eyebrow="kmeta"
         title={<>Users <span className="text-text-muted font-bold text-xl align-middle ml-1">{users.length}</span></>}
         subtitle={activeFilters > 0 ? <>Знайдено <span className="text-accent font-semibold">{filtered.length}</span> · фільтри збережено</> : 'Усі тьютори kmeta'}
       />

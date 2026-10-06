@@ -16,8 +16,8 @@ export default defineConfig(({ mode }) => ({
         name: 'Dashboard',
         short_name: 'Dashboard',
         description: 'Kroky & Urok analytics dashboard',
-        theme_color: '#0f1117',
-        background_color: '#0f1117',
+        theme_color: '#081113',
+        background_color: '#081113',
         display: 'standalone',
         orientation: 'portrait',
         icons: [

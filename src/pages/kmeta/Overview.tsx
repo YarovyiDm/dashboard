@@ -14,8 +14,8 @@ import { usePersistentState } from '../../hooks/usePersistentState';
 import {
   PageHeader, SectionLabel, Panel, Kpi, StackBar, BarList, MiniStat, ConnectGate, LoadingSkeleton,
   AnimatedNumber,
-} from './ui';
-import { fmt, GOLD, TEAL } from './theme';
+} from '../../components/ui';
+import { fmt, GOLD, TEAL } from '../../lib/theme';
 
 // Of each 149 UAH charge, this much reaches the account after WayForPay's fee.
 const WAYFORPAY_PAYOUT_RATIO = 146 / 149;
@@ -211,6 +211,7 @@ export function KmetaOverview() {
   return (
     <div className="max-w-7xl">
       <PageHeader
+        eyebrow="kmeta"
         title="Overview"
         subtitle={<>{stats.totalUsers} tutors · оновлено {new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}</>}
       />

@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { AnimatedNumber } from '../pages/kmeta/ui';
-import { stagger } from '../pages/kmeta/theme';
+import { AnimatedNumber } from './ui';
+import { stagger } from '../lib/theme';
 
 interface Props {
   id: string;

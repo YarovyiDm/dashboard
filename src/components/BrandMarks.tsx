@@ -1,3 +1,5 @@
+import { Footprints } from 'lucide-react';
+
 // Brand mark inspired by the kmeta logo: a gold ring around a gold dot.
 export function KmetaMark({ className = 'w-6 h-6' }: { className?: string }) {
   return (
@@ -6,5 +8,14 @@ export function KmetaMark({ className = 'w-6 h-6' }: { className?: string }) {
       <path d="M16 4 a12 12 0 1 1 -11.4 15.7" fill="none" stroke="var(--color-accent)" strokeWidth="5" strokeLinecap="round" />
       <circle cx="16" cy="16" r="4.5" fill="var(--color-accent)" />
     </svg>
+  );
+}
+
+// Kroky mark: footprints on a teal tile.
+export function KrokyMark({ className = 'w-6 h-6' }: { className?: string }) {
+  return (
+    <span className={`grid place-items-center rounded-lg bg-[var(--k-teal)]/15 text-[var(--k-teal)] ${className}`} aria-hidden>
+      <Footprints className="w-[62%] h-[62%]" />
+    </span>
   );
 }

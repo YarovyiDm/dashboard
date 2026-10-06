@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
-import { MousePointerClick, Download, Users, Eye } from 'lucide-react';
-import { StatCard } from '../../components/StatCard';
+import { MousePointerClick, Download, Users, Palette } from 'lucide-react';
 import { useKrokyUsers } from '../../hooks/useKrokyData';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { PageHeader, Panel, Kpi, BarList, LoadingSkeleton } from '../../components/ui';
 
 const STYLE_NAMES: Record<string, string> = {
   classic: 'Classic', rounded: 'Rounded', dots: 'Dots',
@@ -16,73 +15,25 @@ export function KrokyQR() {
     const totalOpens = users.reduce((s, u) => s + (u.qrOpened || 0), 0);
     const editorUsers = users.filter(u => (u.qrOpened || 0) > 0).length;
     const totalDownloads = users.reduce((s, u) => s + (u.qrDownloads || 0), 0);
-    const downloadUsers = users.filter(u => (u.qrDownloads || 0) > 0).length;
-
-    // Styles viewed popularity
     const styleCount: Record<string, number> = {};
-    users.forEach(u => {
-      u.qrStylesViewed?.forEach(s => {
-        styleCount[s] = (styleCount[s] || 0) + 1;
-      });
-    });
-    const stylesChart = Object.entries(styleCount)
-      .sort(([, a], [, b]) => b - a)
-      .map(([id, count]) => ({ name: STYLE_NAMES[id] || id, count }));
-
-    return { totalOpens, editorUsers, totalDownloads, downloadUsers, stylesChart };
+    users.forEach(u => u.qrStylesViewed?.forEach(st => { styleCount[st] = (styleCount[st] || 0) + 1; }));
+    const styles = Object.entries(styleCount).sort(([, a], [, b]) => b - a);
+    return { totalOpens, editorUsers, totalDownloads, styles };
   }, [users]);
 
-  if (loading) return <div className="text-text-muted">Loading...</div>;
+  if (loading) return <LoadingSkeleton rows={1} />;
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-text-primary mb-6">QR Code Analytics</h1>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard label="Editor Opens" value={data.totalOpens} icon={<MousePointerClick className="w-5 h-5" />} />
-        <StatCard label="Editor Users" value={data.editorUsers} icon={<Users className="w-5 h-5" />} />
-        <StatCard label="Downloads" value={data.totalDownloads} icon={<Download className="w-5 h-5" />} />
-        <StatCard label="Download Users" value={data.downloadUsers} icon={<Eye className="w-5 h-5" />} />
+    <div className="max-w-5xl">
+      <PageHeader eyebrow="kroky" title="QR Code" subtitle="Генератор QR-кодів" />
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <Kpi i={0} compact label="Editor opens" value={data.totalOpens} icon={<MousePointerClick />} tone="teal" />
+        <Kpi i={1} compact label="Editor users" value={data.editorUsers} icon={<Users />} tone="blue" />
+        <Kpi i={2} compact label="Downloads" value={data.totalDownloads} icon={<Download />} tone="gold" />
       </div>
-
-      {/* Styles chart */}
-      {data.stylesChart.length > 0 && (
-        <div className="bg-surface-card border border-border rounded-xl p-5 mb-4">
-          <h2 className="text-sm text-text-secondary mb-4">QR Styles by Views</h2>
-          <ResponsiveContainer width="100%" height={Math.max(180, data.stylesChart.length * 36)}>
-            <BarChart data={data.stylesChart} layout="vertical">
-              <XAxis type="number" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="name" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} width={120} />
-              <Tooltip contentStyle={{ background: '#1a1d27', border: '1px solid #2a2e3a', borderRadius: 8, color: '#f1f5f9' }} />
-              <Bar dataKey="count" fill="#22c55e" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* Top users */}
-      <div className="bg-surface-card border border-border rounded-xl p-5">
-        <h2 className="text-sm text-text-secondary mb-4">Top Users by Downloads</h2>
-        {users.filter(u => (u.qrDownloads || 0) > 0).length === 0 ? (
-          <p className="text-text-muted text-sm">No downloads yet</p>
-        ) : (
-          <div className="space-y-2">
-            {users
-              .filter(u => (u.qrDownloads || 0) > 0)
-              .sort((a, b) => (b.qrDownloads || 0) - (a.qrDownloads || 0))
-              .slice(0, 10)
-              .map(u => (
-                <div key={u.uid} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                  <span className="text-text-primary text-sm">{u.email || u.uid.slice(0, 12)}</span>
-                  <div className="flex gap-4">
-                    <span className="text-text-muted text-xs">{u.qrOpened || 0} opens</span>
-                    <span className="text-green text-sm font-medium">{u.qrDownloads} downloads</span>
-                  </div>
-                </div>
-              ))}
-          </div>
-        )}
-      </div>
+      <Panel i={3} className="mt-3 sm:mt-4" title="Styles by views" icon={<Palette className="w-4 h-4" />} right="users who viewed">
+        <BarList empty="Немає даних" rows={data.styles.map(([id, n]) => ({ key: id, label: STYLE_NAMES[id] || id, value: n }))} />
+      </Panel>
     </div>
   );
 }

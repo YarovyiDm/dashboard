@@ -1,16 +1,29 @@
 import { useMemo } from 'react';
-import { Users, DollarSign, Crown, UserPlus } from 'lucide-react';
-import { StatCard } from '../../components/StatCard';
+import { Users, Wallet, Crown, UserPlus, TrendingUp, Percent, Globe2 } from 'lucide-react';
+import { PageHeader, Panel, Kpi, MiniStat, SectionLabel, LoadingSkeleton, AnimatedNumber } from '../../components/ui';
+import { GOLD, fmt } from '../../lib/theme';
+import { usePersistentState, oneOf } from '../../hooks/usePersistentState';
 import { useKrokyUsers, useKrokyPayments } from '../../hooks/useKrokyData';
 import { useExchangeRates, type Rates } from '../../hooks/useExchangeRates';
 import { paymentNetUah, paymentNetIn, round2, TAX_RATE } from '../../lib/revenue';
 import { toDayMonth, toDayMonthYear } from '../../lib/date';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+
+const CHART_MODES = ['signups', 'revenue'] as const;
+type ChartMode = typeof CHART_MODES[number];
+
+const COUNTRIES = [
+  { key: 'uk', flag: '🇺🇦', name: 'Ukraine', currency: 'UAH' },
+  { key: 'pl', flag: '🇵🇱', name: 'Poland', currency: 'USD' },
+  { key: 'ro', flag: '🇷🇴', name: 'Romania', currency: 'USD' },
+  { key: 'en', flag: '🌍', name: 'Rest of world', currency: 'USD' },
+] as const;
 
 export function KrokyOverview() {
   const { users, loading: usersLoading } = useKrokyUsers();
   const { payments, loading: paymentsLoading } = useKrokyPayments();
   const { rates, loading: ratesLoading } = useExchangeRates();
+  const [chartMode, setChartMode] = usePersistentState<ChartMode>('kroky.overview.chart', 'signups', oneOf(CHART_MODES));
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -159,240 +172,115 @@ export function KrokyOverview() {
     return Object.entries(days).map(([date, uah]) => ({ date: toDayMonth(date), uah: Math.round(uah) }));
   }, [payments, rates]);
 
-  if (usersLoading || paymentsLoading || ratesLoading) {
-    return <div className="text-text-muted">Loading...</div>;
-  }
+  if (usersLoading || paymentsLoading || ratesLoading) return <LoadingSkeleton />;
+
+  const isRevenue = chartMode === 'revenue';
+  const color = isRevenue ? '#3ddc97' : GOLD;
+  const series = isRevenue
+    ? revenueData.map(d => ({ date: d.date, v: d.uah }))
+    : chartData.map(d => ({ date: d.date, v: d.count }));
+  const seriesTotal = series.reduce((s, d) => s + d.v, 0);
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-text-primary mb-6">Kroky Overview</h1>
+    <div className="max-w-7xl">
+      <PageHeader eyebrow="kroky" title="Overview" subtitle={<>{stats.totalUsers} користувачів · USD @ {rates.USD.toFixed(2)} (НБУ)</>} />
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-        <StatCard label="Total Users" value={stats.totalUsers} icon={<Users className="w-5 h-5" />} />
-        <StatCard label="Active Pro" value={stats.activePro} icon={<Crown className="w-5 h-5" />} />
-        <StatCard
-          label="New this week"
-          value={stats.newThisWeek}
-          icon={<UserPlus className="w-5 h-5" />}
-          trend={{ value: stats.weekTrendPct, label: 'vs last week' }}
-        />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Kpi i={0} label="Total users" value={stats.totalUsers} icon={<Users />} tone="teal" />
+        <Kpi i={1} label="Active Pro" value={stats.activePro} icon={<Crown />} tone="gold" />
+        <Kpi i={2} label="New this week" value={stats.newThisWeek} icon={<UserPlus />} tone="green"
+          hint={<span className={stats.weekTrendPct >= 0 ? 'text-green' : 'text-red'}>{stats.weekTrendPct >= 0 ? '+' : ''}{stats.weekTrendPct}% vs мин. тиждень</span>} />
+        <Kpi i={3} label="Conversion" value={`${stats.conversionRate}%`} icon={<Percent />} tone="blue" hint={`${stats.proBuyers} Pro-покупців`} />
       </div>
 
-      {/* Revenue */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-        <div className="bg-surface-card border border-border rounded-xl p-5">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-text-secondary text-sm">Total Revenue</span>
-            <span className="text-text-muted"><DollarSign className="w-5 h-5" /></span>
-          </div>
-          <div className="text-2xl font-semibold text-text-primary">
-            {Math.round(stats.totalRevenue).toLocaleString()} UAH
-          </div>
-          <div className="mt-2 text-xs text-text-muted">
-            Net of Creem fees · USD→UAH @ {rates.USD.toFixed(2)} (NBU)
-          </div>
-        </div>
-        <div className="bg-surface-card border border-border rounded-xl p-5">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-text-secondary text-sm">Net Profit</span>
-          </div>
-          <div className="text-2xl font-semibold text-green">
-            {Math.round(stats.netProfit).toLocaleString()} UAH
-          </div>
-          <div className="mt-2 text-xs text-text-muted">After 5% tax</div>
-        </div>
-      </div>
-
-      {/* Registrations chart */}
-      <div className="bg-surface-card border border-border rounded-xl p-5 mb-8">
-        <h2 className="text-sm text-text-secondary mb-4">New Registrations (30 days)</h2>
-        <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={chartData}>
-            <defs>
-              <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip
-              contentStyle={{ background: '#1a1d27', border: '1px solid #2a2e3a', borderRadius: 8, color: '#f1f5f9' }}
-            />
-            <Area type="monotone" dataKey="count" stroke="#6366f1" fill="url(#colorCount)" strokeWidth={2} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Daily revenue chart */}
-      <div className="bg-surface-card border border-border rounded-xl p-5 mb-8">
-        <h2 className="text-sm text-text-secondary mb-4">Revenue (30 days, UAH net)</h2>
-        <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={revenueData}>
-            <defs>
-              <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} width={45}
-              tickFormatter={(v) => Number(v) >= 1000 ? `${Math.round(Number(v) / 1000)}k` : `${v}`} />
-            <Tooltip
-              contentStyle={{ background: '#1a1d27', border: '1px solid #2a2e3a', borderRadius: 8, color: '#f1f5f9' }}
-              formatter={(v) => [`${Math.round(Number(v)).toLocaleString()} UAH`, 'Revenue']}
-            />
-            <Area type="monotone" dataKey="uah" name="Revenue" stroke="#22c55e" fill="url(#colorRevenue)" strokeWidth={2} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* By country */}
-      <h2 className="text-lg font-semibold text-text-primary mb-4">By Country</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-surface-card border border-border rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-xl">🇺🇦</span>
-            <h3 className="text-lg font-semibold text-text-primary">Ukraine</h3>
-          </div>
-          <div className="flex flex-wrap gap-x-6 gap-y-3">
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.uk.registrations}</div>
-              <div className="text-xs text-text-muted">Registrations</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.uk.revenue} UAH</div>
-              <div className="text-xs text-text-muted">Revenue</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-green">{stats.uk.afterTaxUah} UAH</div>
-              <div className="text-xs text-text-muted">After 5% tax</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.uk.count}</div>
-              <div className="text-xs text-text-muted">Payments</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.uk.buyers}</div>
-              <div className="text-xs text-text-muted">Buyers</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-surface-card border border-border rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-xl">🇵🇱</span>
-            <h3 className="text-lg font-semibold text-text-primary">Poland</h3>
-          </div>
-          <div className="flex flex-wrap gap-x-6 gap-y-3">
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.pl.registrations}</div>
-              <div className="text-xs text-text-muted">Registrations</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.pl.revenue} USD</div>
-              <div className="text-xs text-text-muted">Revenue</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-green">{stats.pl.afterTaxUah} UAH</div>
-              <div className="text-xs text-text-muted">After 5% tax</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.pl.count}</div>
-              <div className="text-xs text-text-muted">Payments</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.pl.buyers}</div>
-              <div className="text-xs text-text-muted">Buyers</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-surface-card border border-border rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-xl">🇷🇴</span>
-            <h3 className="text-lg font-semibold text-text-primary">Romania</h3>
-          </div>
-          <div className="flex flex-wrap gap-x-6 gap-y-3">
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.ro.registrations}</div>
-              <div className="text-xs text-text-muted">Registrations</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.ro.revenue} USD</div>
-              <div className="text-xs text-text-muted">Revenue</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-green">{stats.ro.afterTaxUah} UAH</div>
-              <div className="text-xs text-text-muted">After 5% tax</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.ro.count}</div>
-              <div className="text-xs text-text-muted">Payments</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.ro.buyers}</div>
-              <div className="text-xs text-text-muted">Buyers</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-surface-card border border-border rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-xl">🌍</span>
-            <h3 className="text-lg font-semibold text-text-primary">Rest of World</h3>
-          </div>
-          <div className="flex flex-wrap gap-x-6 gap-y-3">
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.en.registrations}</div>
-              <div className="text-xs text-text-muted">Registrations</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.en.revenue} USD</div>
-              <div className="text-xs text-text-muted">Revenue</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-green">{stats.en.afterTaxUah} UAH</div>
-              <div className="text-xs text-text-muted">After 5% tax</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.en.count}</div>
-              <div className="text-xs text-text-muted">Payments</div>
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.en.buyers}</div>
-              <div className="text-xs text-text-muted">Buyers</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* User → Pro conversion */}
-      <div className="bg-surface-card border border-border rounded-xl p-5 mb-8">
-        <h2 className="text-sm text-text-secondary mb-3">User → Pro Conversion</h2>
-        <div className="flex flex-wrap gap-x-8 gap-y-4">
+      <Panel i={4} gold className="mt-3 sm:mt-4" title="Revenue" icon={<Wallet className="w-4 h-4" />} right="net of Creem fees">
+        <div className="grid sm:grid-cols-2 gap-5">
           <div>
-            <div className="text-lg font-semibold text-text-primary">{stats.totalUsers}</div>
-            <div className="text-xs text-text-muted">Total users</div>
+            <div className="text-xs text-text-muted mb-1">Total</div>
+            <div className="text-3xl sm:text-4xl font-extrabold tracking-tight text-accent leading-none">
+              <AnimatedNumber value={stats.totalRevenue} /> <span className="text-lg font-bold text-accent/70">UAH</span>
+            </div>
           </div>
-          <div>
-            <div className="text-lg font-semibold text-text-primary">{stats.proBuyers}</div>
-            <div className="text-xs text-text-muted">Pro buyers</div>
+          <div className="sm:border-l sm:border-border sm:pl-5">
+            <div className="text-xs text-text-muted mb-1">Net profit (after 5% tax)</div>
+            <div className="text-2xl sm:text-3xl font-extrabold tracking-tight text-green leading-none">
+              <AnimatedNumber value={stats.netProfit} /> <span className="text-base font-bold text-green/70">UAH</span>
+            </div>
           </div>
-          <div>
-            <div className="text-lg font-semibold text-text-primary">{stats.totalProPurchases}</div>
-            <div className="text-xs text-text-muted">Pro purchases</div>
+        </div>
+      </Panel>
+
+      <Panel i={5} className="mt-3 sm:mt-4" title={isRevenue ? 'Revenue, 30 days' : 'New registrations, 30 days'} icon={<TrendingUp className="w-4 h-4" />}
+        right={
+          <div className="flex bg-surface rounded-lg p-0.5 border border-border">
+            {CHART_MODES.map(m => (
+              <button key={m} onClick={() => setChartMode(m)}
+                className={`k-chip px-2.5 py-1 rounded-md text-xs font-semibold ${chartMode === m ? 'bg-accent text-[#1d1503]' : 'text-text-muted hover:text-text-primary'}`}>
+                {m === 'signups' ? 'Sign-ups' : 'Revenue'}
+              </button>
+            ))}
           </div>
-          <div>
-            <div className="text-lg font-semibold text-accent">{stats.conversionRate}%</div>
-            <div className="text-xs text-text-muted">Conversion rate</div>
-          </div>
+        }>
+        <div className="flex items-baseline gap-2 -mt-1 mb-3">
+          <span className="text-2xl font-extrabold text-text-primary"><AnimatedNumber value={seriesTotal} /></span>
+          <span className="text-xs text-text-muted">{isRevenue ? 'UAH за 30 днів' : 'за 30 днів'}</span>
+        </div>
+        <div className="-mx-2 sm:mx-0">
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={series} margin={{ top: 6, right: 8, left: -14, bottom: 0 }}>
+              <defs>
+                <linearGradient id="krokyArea" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={color} stopOpacity={0.45} />
+                  <stop offset="100%" stopColor={color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} stroke="#1c3035" strokeDasharray="3 6" />
+              <XAxis dataKey="date" tick={{ fill: '#6a8783', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={18} />
+              <YAxis tick={{ fill: '#6a8783', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} width={44}
+                tickFormatter={(v) => Number(v) >= 1000 ? `${Math.round(Number(v) / 1000)}k` : `${v}`} />
+              <Tooltip
+                cursor={{ stroke: color, strokeOpacity: 0.35, strokeDasharray: '3 3' }}
+                contentStyle={{ background: '#0e1a1d', border: '1px solid #1c3035', borderRadius: 12, color: '#ecf3f1' }}
+                labelStyle={{ color: '#a3b8b4', fontSize: 12 }}
+                itemStyle={{ color, fontWeight: 700 }}
+                formatter={(v) => [isRevenue ? `${fmt(Number(v))} UAH` : v, isRevenue ? 'revenue' : 'sign-ups']}
+              />
+              <Area key={chartMode} type="monotone" dataKey="v" stroke={color} fill="url(#krokyArea)" strokeWidth={2.5}
+                activeDot={{ r: 5, fill: color, stroke: '#081113', strokeWidth: 2 }} animationDuration={900} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </Panel>
+
+      <SectionLabel i={6}>By country</SectionLabel>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {COUNTRIES.map((c, idx) => {
+          const st = stats[c.key];
+          return (
+            <Panel key={c.key} i={7 + idx} className="k-card-hover" title={<span className="flex items-center gap-2"><span className="text-lg leading-none">{c.flag}</span>{c.name}</span>}>
+              <div className="text-2xl font-extrabold tracking-tight text-text-primary leading-none">
+                <AnimatedNumber value={st.revenue} /> <span className="text-sm font-bold text-text-muted">{c.currency}</span>
+              </div>
+              <div className="text-xs text-green font-semibold mt-1.5">{fmt(st.afterTaxUah)} UAH після податку</div>
+              <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-border/70">
+                <MiniStat label="Sign-ups" value={st.registrations} />
+                <MiniStat label="Payments" value={st.count} />
+                <MiniStat label="Buyers" value={st.buyers} className="text-accent" />
+              </div>
+            </Panel>
+          );
+        })}
+      </div>
+
+      <SectionLabel i={11}>Conversion</SectionLabel>
+      <Panel i={12} title="User → Pro" icon={<Globe2 className="w-4 h-4" />}>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
+          <MiniStat label="Pro buyers" value={stats.proBuyers} className="text-accent" />
+          <MiniStat label="Pro purchases" value={stats.totalProPurchases} />
           <div className="relative group">
-            <div className="text-lg font-semibold text-text-primary cursor-help">{stats.slowConverters}</div>
-            <div className="text-xs text-text-muted cursor-help">Bought &gt;1 week after signup</div>
+            <MiniStat label="Bought >1 week after signup" value={stats.slowConverters} />
             {stats.slowConverterEmails.length > 0 && (
-              <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10 bg-surface-hover border border-border rounded-lg p-3 shadow-lg max-h-64 max-w-[calc(100vw-2rem)] overflow-auto">
+              <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10 k-card p-3 max-h-64 max-w-[calc(100vw-2rem)] overflow-auto">
                 <div className="text-xs text-text-muted mb-1">Users ({stats.slowConverterEmails.length})</div>
                 {stats.slowConverterEmails.map(email => (
                   <div key={email} className="text-xs text-text-primary whitespace-nowrap">{email}</div>
@@ -401,13 +289,10 @@ export function KrokyOverview() {
             )}
           </div>
           <div title={stats.peakDay ? `on ${toDayMonthYear(stats.peakDay)}` : undefined}>
-            <div className="text-lg font-semibold text-text-primary">{stats.peakPurchases}</div>
-            <div className="text-xs text-text-muted">
-              Most purchases / day{stats.peakDay ? ` (${toDayMonth(stats.peakDay)})` : ''}
-            </div>
+            <MiniStat label={`Peak purchases / day${stats.peakDay ? ` (${toDayMonth(stats.peakDay)})` : ''}`} value={stats.peakPurchases} />
           </div>
         </div>
-      </div>
+      </Panel>
     </div>
   );
 }

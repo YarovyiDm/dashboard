@@ -1,11 +1,11 @@
 import { LayoutGrid, LogOut, Footprints } from 'lucide-react';
 import { ProjectCard } from '../components/ProjectCard';
-import { KmetaMark } from '../components/KmetaMark';
+import { KmetaMark } from '../components/BrandMarks';
 import { useAuth } from '../hooks/useAuth';
 import { useKrokyUsers, useKrokyPayments } from '../hooks/useKrokyData';
 import { useKmetaUsers, useKmetaRevenue, isKmetaPro } from '../hooks/useKmetaData';
-import { AnimatedNumber } from './kmeta/ui';
-import { stagger, GOLD, TEAL } from './kmeta/theme';
+import { AnimatedNumber } from '../components/ui';
+import { stagger, GOLD, TEAL } from '../lib/theme';
 
 function greeting(h: number) {
   if (h < 5) return 'Доброї ночі';

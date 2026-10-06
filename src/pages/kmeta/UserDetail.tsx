@@ -11,8 +11,8 @@ import {
   type KmetaPageReport, type KmetaPublicProfile,
 } from '../../hooks/useKmetaData';
 import { toJsDate } from '../../lib/date';
-import { ConnectGate, LoadingSkeleton, Avatar, Panel, StackBar, AnimatedNumber } from './ui';
-import { stagger } from './theme';
+import { ConnectGate, LoadingSkeleton, Avatar, Panel, StackBar, AnimatedNumber } from '../../components/ui';
+import { stagger } from '../../lib/theme';
 
 const SITE = 'https://kmeta.com.ua';
 

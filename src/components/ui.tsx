@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { LogIn } from 'lucide-react';
-import { GOLD, stagger, fmt } from './theme';
+import { GOLD, stagger, fmt } from '../lib/theme';
 
-// Shared building blocks for the kmeta section. Colors come from the
-// `.theme-pine` tokens (see index.css); motion classes are k-rise / k-grow.
+// Shared building blocks for every dashboard page. Colors come from the
+// theme tokens (see index.css); motion classes are k-rise / k-grow.
 
 const reduceMotion = () =>
   typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -33,12 +33,13 @@ export function AnimatedNumber({ value, format = fmt }: { value: number; format?
   return <>{format(shown)}</>;
 }
 
-/** Renders numbers animated, and placeholders ('—', '…') as-is. */
+/** Renders numbers animated; other strings as-is, with placeholders ('—', '…') muted. */
 export function Num({ v }: { v: number | string }) {
-  return typeof v === 'number' ? <AnimatedNumber value={v} /> : <span className="text-text-muted">{v}</span>;
+  if (typeof v === 'number') return <AnimatedNumber value={v} />;
+  return v === '—' || v === '…' ? <span className="text-text-muted">{v}</span> : <>{v}</>;
 }
 
-export function PageHeader({ title, subtitle, right, eyebrow = 'kmeta' }: { title: ReactNode; subtitle?: ReactNode; right?: ReactNode; eyebrow?: string }) {
+export function PageHeader({ title, subtitle, right, eyebrow }: { title: ReactNode; subtitle?: ReactNode; right?: ReactNode; eyebrow: string }) {
   return (
     <div className="k-rise flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between mb-6 sm:mb-8">
       <div className="min-w-0">
@@ -183,7 +184,7 @@ export function ConnectGate({ title, error, onConnect, retry = false, text }: {
 }) {
   return (
     <div>
-      <PageHeader title={title} />
+      <PageHeader eyebrow="kmeta" title={title} />
       <div className="k-card k-card-gold k-rise p-6 sm:p-8 max-w-md">
         <div className="w-12 h-12 rounded-2xl grid place-items-center bg-accent/15 text-accent mb-4 ring-1 ring-accent/25">
           <LogIn className="w-5 h-5" />
@@ -227,6 +228,28 @@ export function Avatar({ src, name, size = 36, gold = false }: { src?: string; n
       style={{ width: size, height: size, fontSize: size * 0.4 }}
     >
       {(name || '?')[0].toUpperCase()}
+    </div>
+  );
+}
+
+/** Animated progress ring; `value` is 0–1. Children render in the middle. */
+export function Ring({ value, size = 132, stroke = 12, color = GOLD, children }: {
+  value: number; size?: number; stroke?: number; color?: string; children?: ReactNode;
+}) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const v = Math.max(0, Math.min(1, value));
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-surface-hover)" strokeWidth={stroke} />
+        <circle
+          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
+          strokeDasharray={c} strokeDashoffset={c * (1 - v)}
+          className="k-ring" style={{ '--c': c } as CSSProperties}
+        />
+      </svg>
+      <div className="absolute inset-0 grid place-items-center text-center">{children}</div>
     </div>
   );
 }
