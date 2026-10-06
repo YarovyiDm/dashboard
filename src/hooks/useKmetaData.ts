@@ -311,10 +311,6 @@ export interface KmetaSubPayment {
   provider?: string;       // 'creem' (RO)
 }
 
-// Pro payments made before subscriptionPayments logging existed — they have no
-// records in the DB, so they're added as a fixed legacy baseline.
-// TODO: drop once these are backfilled into subscriptionPayments.
-export const LEGACY_PRO_PAYMENTS = 4;
 
 // All subscription payments across every tutor, in one collection-group read.
 // Compute totals (by currency, new vs renewal, by period) from the returned list.

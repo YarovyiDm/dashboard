@@ -6,7 +6,7 @@ import {
 import {
   useKmetaUsers, useKmetaSubcounts, useKmetaRevenue, isKmetaPro, kmetaEffectiveStatus,
   useKmetaPublicProfiles, useKmetaBookingRequests, useKmetaPageReports, useKmetaConvertedTrials,
-  kmetaAcquisitionChannel, useKmetaPushTutors, LEGACY_PRO_PAYMENTS, type KmetaChannel,
+  kmetaAcquisitionChannel, useKmetaPushTutors, type KmetaChannel,
 } from '../../hooks/useKmetaData';
 import { toDayMonth, toJsDate } from '../../lib/date';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -17,7 +17,6 @@ import {
 } from './ui';
 import { fmt, GOLD, TEAL } from './theme';
 
-const PRO_PRICE = 149;
 // Of each 149 UAH charge, this much reaches the account after WayForPay's fee.
 const WAYFORPAY_PAYOUT_RATIO = 146 / 149;
 // 5% ФОП single tax + 1% військовий збір.
@@ -73,22 +72,21 @@ export function KmetaOverview() {
   }, [users, range]);
 
   // Subscription revenue from the collection-group read, split by currency and
-  // new vs renewal, plus the fixed legacy UAH baseline for pre-logging payments.
+  // new vs renewal.
   const revenue = useMemo(() => {
     const list = subPayments ?? [];
-    let uahLogged = 0, eur = 0, renewals = 0, newLogged = 0;
+    let uahGross = 0, eur = 0, renewals = 0, newCount = 0;
     list.forEach(p => {
       const amt = Number(p.amount) || 0;
-      if (p.currency === 'EUR') eur += amt; else uahLogged += amt;
-      if (p.isRenewal) renewals++; else newLogged++;
+      if (p.currency === 'EUR') eur += amt; else uahGross += amt;
+      if (p.isRenewal) renewals++; else newCount++;
     });
-    const uahGross = LEGACY_PRO_PAYMENTS * PRO_PRICE + uahLogged;
     return {
       uahGross,
       uahNet: uahGross * WAYFORPAY_PAYOUT_RATIO * (1 - TOTAL_TAX),
       eur,
-      paymentsCount: LEGACY_PRO_PAYMENTS + list.length,
-      newCount: LEGACY_PRO_PAYMENTS + newLogged,
+      paymentsCount: list.length,
+      newCount,
       renewals,
     };
   }, [subPayments]);
@@ -249,7 +247,6 @@ export function KmetaOverview() {
             {[
               [`${revenue.newCount} нові`, 'bg-accent/10 text-accent'],
               [`автосписання: ${revenue.renewals}`, 'bg-green/10 text-green'],
-              [`${LEGACY_PRO_PAYMENTS} legacy`, 'bg-surface-hover text-text-muted'],
             ].map(([t, c]) => <span key={t} className={`px-2.5 py-1 rounded-full text-xs font-semibold ${c}`}>{t}</span>)}
           </div>
         </Panel>

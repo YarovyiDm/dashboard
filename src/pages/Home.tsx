@@ -3,7 +3,7 @@ import { ProjectCard } from '../components/ProjectCard';
 import { KmetaMark } from '../components/KmetaMark';
 import { useAuth } from '../hooks/useAuth';
 import { useKrokyUsers, useKrokyPayments } from '../hooks/useKrokyData';
-import { useKmetaUsers, useKmetaRevenue, isKmetaPro, LEGACY_PRO_PAYMENTS } from '../hooks/useKmetaData';
+import { useKmetaUsers, useKmetaRevenue, isKmetaPro } from '../hooks/useKmetaData';
 import { AnimatedNumber } from './kmeta/ui';
 import { stagger, GOLD, TEAL } from './kmeta/theme';
 
@@ -100,8 +100,8 @@ export function Home() {
             stats={[
               { label: 'Users', value: kmetaConnected ? kmetaUsers.length : '—' },
               { label: 'Pro', value: kmetaConnected ? kmetaPro : '—' },
-              // Every payment (new + renewals + legacy), not unique payers.
-              { label: 'Payments', value: kmetaPayments ? LEGACY_PRO_PAYMENTS + kmetaPayments.length : '—' },
+              // Every payment (new + auto-renewals), not unique payers.
+              { label: 'Payments', value: kmetaPayments ? kmetaPayments.length : '—' },
             ]}
           />
           <ProjectCard
