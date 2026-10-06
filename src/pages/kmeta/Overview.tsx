@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
-import { Users, Crown, UserPlus, LogIn, BookOpen, Layers, GraduationCap, DollarSign, Globe, Calendar, UserCheck, Flag } from 'lucide-react';
+import { Users, Crown, UserPlus, LogIn, BookOpen, Layers, GraduationCap, DollarSign, Globe, Calendar, UserCheck, Flag, Tag, Activity, Bell, Eye } from 'lucide-react';
 import { StatCard } from '../../components/StatCard';
 import {
   useKmetaUsers, useKmetaSubcounts, useKmetaRevenue, isKmetaPro, kmetaEffectiveStatus,
   useKmetaPublicProfiles, useKmetaBookingRequests, useKmetaPageReports, useKmetaConvertedTrials,
-  kmetaAcquisitionChannel, type KmetaChannel,
+  kmetaAcquisitionChannel, useKmetaPushTutors, type KmetaChannel,
 } from '../../hooks/useKmetaData';
 import { toDayMonth, toJsDate } from '../../lib/date';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -27,6 +27,7 @@ export function KmetaOverview() {
   const { requests } = useKmetaBookingRequests(connected);
   const { reports } = useKmetaPageReports(connected);
   const { count: convertedTrials, available: convertedAvailable } = useKmetaConvertedTrials(connected);
+  const { uids: pushUids } = useKmetaPushTutors(connected);
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -124,6 +125,70 @@ export function KmetaOverview() {
     return { channels, topCampaigns: top(byCampaign), topTerms: top(byTerm) };
   }, [users]);
 
+  // Tagged links — visits and requests per source, summed over all tutors.
+  const sources = useMemo(() => {
+    const label = new Map<string, string>();
+    const visits = new Map<string, number>();
+    const reqBySrc = new Map<string, number>();
+    let tutorsWithTags = 0;
+    users.forEach(u => {
+      if (u.bookingSources && u.bookingSources.length > 0) {
+        tutorsWithTags++;
+        u.bookingSources.forEach(s => { if (s.label) label.set(s.id, s.label); });
+      }
+      if (u.bookingVisits) {
+        Object.values(u.bookingVisits).forEach(bySrc => {
+          Object.entries(bySrc).forEach(([src, v]) => visits.set(src, (visits.get(src) || 0) + (Number(v) || 0)));
+        });
+      }
+    });
+    (requests ?? []).forEach(r => { const s = r.source || 'direct'; reqBySrc.set(s, (reqBySrc.get(s) || 0) + 1); });
+    const all = new Set([...visits.keys(), ...reqBySrc.keys()]);
+    const rows = [...all].map(src => ({ src, label: label.get(src) || src, visits: visits.get(src) || 0, requests: reqBySrc.get(src) || 0 }))
+      .sort((a, b) => b.visits - a.visits || b.requests - a.requests);
+    return { tutorsWithTags, rows };
+  }, [users, requests]);
+
+  const engagement = useMemo(() => {
+    const now = Date.now();
+    const d7 = now - 7 * 86400000, d30 = now - 30 * 86400000;
+    let active7 = 0, active30 = 0, paywall = 0;
+    users.forEach(u => {
+      const t = u.lastVisitAt ? new Date(u.lastVisitAt).getTime() : NaN;
+      if (Number.isFinite(t)) { if (t >= d7) active7++; if (t >= d30) active30++; }
+      paywall += u.paywallViews || 0;
+    });
+    return { active7, active30, paywall };
+  }, [users]);
+
+  const whatsNew = useMemo(() => {
+    const m = new Map<string, { opened: number; more: number; dismissed: number }>();
+    users.forEach(u => {
+      if (!u.updatesLog) return;
+      Object.entries(u.updatesLog).forEach(([id, v]) => {
+        const e = m.get(id) || { opened: 0, more: 0, dismissed: 0 };
+        if (v?.action === 'more') e.more++;
+        else if (v?.action === 'dismissed') e.dismissed++;
+        else e.opened++;
+        m.set(id, e);
+      });
+    });
+    return [...m.entries()].map(([id, v]) => ({ id, ...v })).sort((a, b) => (b.opened + b.more + b.dismissed) - (a.opened + a.more + a.dismissed));
+  }, [users]);
+
+  const cohorts = useMemo(() => {
+    const m = new Map<string, { signups: number; pro: number }>();
+    users.forEach(u => {
+      const d = toJsDate(u.createdAt);
+      if (!d) return;
+      const key = d.toISOString().slice(0, 7);
+      const e = m.get(key) || { signups: 0, pro: 0 };
+      e.signups++; if (isKmetaPro(u)) e.pro++;
+      m.set(key, e);
+    });
+    return [...m.entries()].map(([month, v]) => ({ month, ...v })).sort((a, b) => a.month.localeCompare(b.month));
+  }, [users]);
+
   if (!connected) {
     return (
       <div>
@@ -171,6 +236,7 @@ export function KmetaOverview() {
   const total = (n: number): string | number => (!countsAvailable ? '—' : countsLoading ? '…' : n);
   const createdPages = users.filter(u => u.publicSlug).length;
   const publishedPages = (profiles ?? []).filter(p => p.enabled).length;
+  const pushOn = pushUids ? users.filter(u => pushUids.has(u.uid)).length : null;
 
   return (
     <div>
@@ -350,6 +416,62 @@ export function KmetaOverview() {
           )}
         </div>
       )}
+
+      {/* Tagged links — where visitors come from */}
+      <div className="bg-surface-card border border-border rounded-xl p-5 mb-4">
+        <h2 className="text-sm text-text-secondary mb-3 flex items-center justify-between">
+          <span className="flex items-center gap-2"><Tag className="w-4 h-4" /> Tagged links</span>
+          <span className="text-xs text-text-muted">{sources.tutorsWithTags} tutors using tags</span>
+        </h2>
+        {sources.rows.length > 0 ? (
+          <div>
+            <div className="flex text-xs text-text-muted pb-1.5">
+              <span className="flex-1">Source</span>
+              <span className="w-24 text-right">Visits</span>
+              <span className="w-24 text-right">Requests</span>
+            </div>
+            {sources.rows.map(r => (
+              <div key={r.src} className="flex text-sm py-1 border-t border-border">
+                <span className="flex-1 text-text-primary truncate">{r.label}</span>
+                <span className="w-24 text-right text-text-secondary">{r.visits}</span>
+                <span className="w-24 text-right text-text-secondary">{r.requests}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm text-text-muted">No tagged-link data yet</div>
+        )}
+      </div>
+
+      {/* Engagement */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+        <StatCard label="Active 7d" value={engagement.active7} icon={<Activity className="w-5 h-5" />} />
+        <StatCard label="Active 30d" value={engagement.active30} icon={<Activity className="w-5 h-5" />} />
+        <StatCard label="Push on" value={pushOn ?? '—'} icon={<Bell className="w-5 h-5" />} />
+        <StatCard label="Paywall views" value={engagement.paywall} icon={<Eye className="w-5 h-5" />} />
+      </div>
+
+      {/* What's new + cohorts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div className="bg-surface-card border border-border rounded-xl p-5">
+          <h2 className="text-sm text-text-secondary mb-3">What's new (opened / more / dismissed)</h2>
+          {whatsNew.length > 0 ? whatsNew.map(w => (
+            <div key={w.id} className="flex items-center justify-between text-sm py-1 border-t border-border first:border-0">
+              <span className="text-text-primary truncate mr-3">{w.id}</span>
+              <span className="text-text-secondary shrink-0">{w.opened} / {w.more} / {w.dismissed}</span>
+            </div>
+          )) : <div className="text-sm text-text-muted">No data</div>}
+        </div>
+        <div className="bg-surface-card border border-border rounded-xl p-5">
+          <h2 className="text-sm text-text-secondary mb-3">Cohorts by month (sign-ups / Pro)</h2>
+          {cohorts.length > 0 ? cohorts.map(c => (
+            <div key={c.month} className="flex items-center justify-between text-sm py-1 border-t border-border first:border-0">
+              <span className="text-text-primary">{c.month}</span>
+              <span className="text-text-secondary">{c.signups} / <span className="text-amber">{c.pro}</span></span>
+            </div>
+          )) : <div className="text-sm text-text-muted">No data</div>}
+        </div>
+      </div>
 
       {/* Registrations chart */}
       <div className="bg-surface-card border border-border rounded-xl p-5 mb-8">

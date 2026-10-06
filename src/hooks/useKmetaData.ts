@@ -41,6 +41,16 @@ export interface KmetaUser {
   subscriptionOrderRef?: string;
   // Public booking page.
   publicSlug?: string;
+  // Tagged links to the page.
+  bookingSources?: { id: string; label?: string }[];
+  bookingVisits?: Record<string, Record<string, number>>; // month -> source -> visits
+  // Engagement (client-written).
+  visitCount?: number;
+  lastVisitAt?: string;
+  totalTimeOnSiteSec?: number;
+  paywallViews?: number;
+  // "What's new" feed: update id -> { seenAt, action }.
+  updatesLog?: Record<string, { seenAt?: string; action?: string }>;
 }
 
 export type KmetaStatus = 'free' | 'pro' | 'pro_ending' | 'cancelled';
@@ -540,4 +550,25 @@ export function useKmetaTutorReports(uid: string | undefined, enabled: boolean) 
   }, [uid]);
 
   return { reports, available, setStatus };
+}
+
+// UIDs of tutors with push on (≥1 fcmTokens doc), via collection-group.
+export function useKmetaPushTutors(enabled: boolean) {
+  const [uids, setUids] = useState<Set<string> | null>(null);
+  const [available, setAvailable] = useState(true);
+  useEffect(() => {
+    if (!enabled) { setUids(null); return; }
+    let cancelled = false;
+    getDocs(collectionGroup(kmetaDb, 'fcmTokens'))
+      .then(snap => {
+        if (cancelled) return;
+        const s = new Set<string>();
+        snap.docs.forEach(d => { const uid = d.ref.parent.parent?.id; if (uid) s.add(uid); });
+        setUids(s);
+        setAvailable(true);
+      })
+      .catch(() => { if (!cancelled) { setUids(null); setAvailable(false); } });
+    return () => { cancelled = true; };
+  }, [enabled]);
+  return { uids, available };
 }

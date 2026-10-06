@@ -188,6 +188,24 @@ export function KmetaUserDetail() {
   const a = user.acquisition;
   const channel = kmetaAcquisitionChannel(user);
 
+  const srcMap = new Map<string, { label: string; visits: number; requests: number; accepted: number }>();
+  (user.bookingSources ?? []).forEach(s => { srcMap.set(s.id, { label: s.label || s.id, visits: 0, requests: 0, accepted: 0 }); });
+  if (user.bookingVisits) {
+    Object.values(user.bookingVisits).forEach(bs => Object.entries(bs).forEach(([src, v]) => {
+      const e = srcMap.get(src) || { label: src, visits: 0, requests: 0, accepted: 0 };
+      e.visits += Number(v) || 0;
+      srcMap.set(src, e);
+    }));
+  }
+  (requests ?? []).forEach(r => {
+    const src = r.source || 'direct';
+    const e = srcMap.get(src) || { label: src, visits: 0, requests: 0, accepted: 0 };
+    e.requests++;
+    if (r.status === 'accepted') e.accepted++;
+    srcMap.set(src, e);
+  });
+  const srcRows = [...srcMap.entries()].map(([src, v]) => ({ src, ...v })).sort((x, y) => y.visits - x.visits || y.requests - x.requests);
+
   return (
     <div>
       <Link to="/kmeta/users" className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-text-secondary transition-colors mb-5">
@@ -274,6 +292,13 @@ export function KmetaUserDetail() {
           <Row label="First visit" value={fmtDateTime(a?.capturedAt)} />
           {a?.lastTouch && <Row label="Last touch" value={`${a.lastTouch.source || '—'} · ${a.lastTouch.utmCampaign || '—'}`} />}
         </Block>
+
+        <Block title="Engagement">
+          <Row label="Last visit" value={fmtDateTime(user.lastVisitAt)} />
+          <Row label="Visits" value={user.visitCount ?? 0} />
+          <Row label="Time on site" value={user.totalTimeOnSiteSec ? `${Math.round(user.totalTimeOnSiteSec / 60)} min` : '—'} />
+          <Row label="Paywall views" value={user.paywallViews ?? 0} />
+        </Block>
       </div>
 
       {subs && subs.length > 0 && (
@@ -292,6 +317,30 @@ export function KmetaUserDetail() {
               />
             ))}
           </Block>
+        </div>
+      )}
+
+      {srcRows.length > 0 && (
+        <div className="mt-4">
+          <div className="bg-surface-card border border-border rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-border">
+              <h2 className="text-sm font-semibold text-text-primary">Tagged links</h2>
+            </div>
+            <div className="px-5 py-2 flex text-xs text-text-muted">
+              <span className="flex-1">Source</span>
+              <span className="w-16 text-right">Visits</span>
+              <span className="w-20 text-right">Requests</span>
+              <span className="w-20 text-right">Accepted</span>
+            </div>
+            {srcRows.map(r => (
+              <div key={r.src} className="px-5 py-2 flex text-sm border-t border-border">
+                <span className="flex-1 text-text-primary truncate">{r.label}</span>
+                <span className="w-16 text-right text-text-secondary">{r.visits}</span>
+                <span className="w-20 text-right text-text-secondary">{r.requests}</span>
+                <span className="w-20 text-right text-text-secondary">{r.accepted}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
