@@ -1,7 +1,10 @@
 import { useMemo } from 'react';
-import { Users, Crown, UserPlus, LogIn, BookOpen, Layers, GraduationCap, DollarSign } from 'lucide-react';
+import { Users, Crown, UserPlus, LogIn, BookOpen, Layers, GraduationCap, DollarSign, Globe, Calendar, UserCheck, Flag } from 'lucide-react';
 import { StatCard } from '../../components/StatCard';
-import { useKmetaUsers, useKmetaSubcounts, useKmetaRevenue, isKmetaPro, kmetaEffectiveStatus } from '../../hooks/useKmetaData';
+import {
+  useKmetaUsers, useKmetaSubcounts, useKmetaRevenue, isKmetaPro, kmetaEffectiveStatus,
+  useKmetaPublicProfiles, useKmetaBookingRequests, useKmetaPageReports, useKmetaConvertedTrials,
+} from '../../hooks/useKmetaData';
 import { toDayMonth, toJsDate } from '../../lib/date';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -19,6 +22,10 @@ export function KmetaOverview() {
   const { users, loading, connected, connect, error } = useKmetaUsers();
   const { totals, loading: countsLoading, available: countsAvailable } = useKmetaSubcounts(users);
   const { payments: subPayments } = useKmetaRevenue(connected);
+  const { profiles } = useKmetaPublicProfiles(connected);
+  const { requests } = useKmetaBookingRequests(connected);
+  const { reports } = useKmetaPageReports(connected);
+  const { count: convertedTrials, available: convertedAvailable } = useKmetaConvertedTrials(connected);
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -75,6 +82,26 @@ export function KmetaOverview() {
     };
   }, [subPayments]);
 
+  const bookingStats = useMemo(() => {
+    const list = requests ?? [];
+    const by = { new: 0, accepted: 0, declined: 0 };
+    list.forEach(r => {
+      if (r.status === 'new') by.new++;
+      else if (r.status === 'accepted') by.accepted++;
+      else if (r.status === 'declined') by.declined++;
+    });
+    return { total: list.length, ...by };
+  }, [requests]);
+
+  const reportStats = useMemo(() => {
+    const list = reports ?? [];
+    return {
+      total: list.length,
+      newCount: list.filter(r => r.status === 'new').length,
+      tutors: new Set(list.map(r => r.uid || r.slug)).size,
+    };
+  }, [reports]);
+
   if (!connected) {
     return (
       <div>
@@ -120,6 +147,8 @@ export function KmetaOverview() {
   }
 
   const total = (n: number): string | number => (!countsAvailable ? '—' : countsLoading ? '…' : n);
+  const createdPages = users.filter(u => u.publicSlug).length;
+  const publishedPages = (profiles ?? []).filter(p => p.enabled).length;
 
   return (
     <div>
@@ -190,6 +219,56 @@ export function KmetaOverview() {
           <div>
             <div className="text-lg font-semibold text-red">{stats.statusCounts.cancelled}</div>
             <div className="text-xs text-text-muted">Cancelled</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Booking pages + trial requests + page reports */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+        <StatCard label="Booking pages" value={createdPages} icon={<Globe className="w-5 h-5" />} />
+        <StatCard label="Published" value={publishedPages} icon={<Globe className="w-5 h-5" />} />
+        <StatCard label="Trial requests" value={bookingStats.total} icon={<Calendar className="w-5 h-5" />} />
+        <StatCard label="Became students" value={convertedAvailable && convertedTrials !== null ? convertedTrials : '—'} icon={<UserCheck className="w-5 h-5" />} />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        <div className="bg-surface-card border border-border rounded-xl p-5">
+          <h2 className="text-sm text-text-secondary mb-3">Trial requests</h2>
+          <div className="flex flex-wrap gap-x-8 gap-y-4">
+            <div>
+              <div className="text-lg font-semibold text-blue">{bookingStats.new}</div>
+              <div className="text-xs text-text-muted">New</div>
+            </div>
+            <div>
+              <div className="text-lg font-semibold text-green">{bookingStats.accepted}</div>
+              <div className="text-xs text-text-muted">Accepted</div>
+            </div>
+            <div>
+              <div className="text-lg font-semibold text-text-muted">{bookingStats.declined}</div>
+              <div className="text-xs text-text-muted">Declined</div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-surface-card border border-border rounded-xl p-5">
+          <h2 className="text-sm text-text-secondary mb-3 flex items-center gap-2">
+            <Flag className="w-4 h-4" /> Page reports
+            {reportStats.newCount > 0 && (
+              <span className="px-1.5 py-0.5 bg-red/15 text-red rounded text-xs font-medium">{reportStats.newCount} new</span>
+            )}
+          </h2>
+          <div className="flex flex-wrap gap-x-8 gap-y-4">
+            <div>
+              <div className="text-lg font-semibold text-text-primary">{reportStats.total}</div>
+              <div className="text-xs text-text-muted">Total</div>
+            </div>
+            <div>
+              <div className={`text-lg font-semibold ${reportStats.newCount > 0 ? 'text-red' : 'text-text-primary'}`}>{reportStats.newCount}</div>
+              <div className="text-xs text-text-muted">New (unreviewed)</div>
+            </div>
+            <div>
+              <div className="text-lg font-semibold text-text-primary">{reportStats.tutors}</div>
+              <div className="text-xs text-text-muted">Tutors with reports</div>
+            </div>
           </div>
         </div>
       </div>

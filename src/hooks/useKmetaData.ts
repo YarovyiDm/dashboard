@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, collectionGroup, getCountFromServer, getDocs, query } from 'firebase/firestore';
+import { collection, collectionGroup, getCountFromServer, getDocs, query, where } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { kmetaDb, kmetaAuth } from '../lib/firebase';
 import { toJsDate } from '../lib/date';
@@ -21,6 +21,8 @@ export interface KmetaUser {
   remindBefore10?: boolean;
   remindBefore30?: boolean;
   subscriptionOrderRef?: string;
+  // Public booking page.
+  publicSlug?: string;
 }
 
 export type KmetaStatus = 'free' | 'pro' | 'pro_ending' | 'cancelled';
@@ -317,4 +319,115 @@ export function useKmetaTutorSubscriptions(uid: string | undefined, enabled: boo
   }, [uid, enabled]);
 
   return { payments, available };
+}
+
+// ── Booking pages, trial requests, reports ──────────────────────────────────
+
+export interface KmetaPublicProfile {
+  slug?: string;
+  uid?: string;
+  enabled?: boolean;
+  name?: string;
+  photo?: string;
+  subjects?: string[];
+  bio?: string;
+  city?: string;
+  format?: string;
+  price?: number;
+  trialPrice?: number;
+  currency?: string;
+  socials?: Record<string, string>;
+  links?: { label?: string; url?: string }[];
+  updatedAt?: string;
+}
+
+export interface KmetaBookingRequest {
+  slug?: string;
+  slot?: string;
+  status?: string;   // 'new' | 'accepted' | 'declined'
+  createdAt?: string;
+  decidedAt?: string;
+  studentId?: string;
+  source?: string;   // tag of the link the visitor came by
+  subject?: string;
+  locale?: string;
+}
+
+export interface KmetaPageReport {
+  slug?: string;
+  uid?: string;
+  reason?: string;   // 'fake' | 'abuse' | 'adult' | 'spam' | 'privacy' | 'cheating' | 'other'
+  details?: string;
+  contact?: string;
+  locale?: string;
+  status?: string;   // 'new' | 'reviewed' | 'dismissed' | 'actioned'
+  createdAt?: string;
+  pageUrl?: string;
+  reviewedAt?: string;
+  reviewNote?: string;
+  snapshot?: KmetaPublicProfile;
+}
+
+// All public booking pages (one per tutor who created one). `enabled` = published.
+export function useKmetaPublicProfiles(enabled: boolean) {
+  const [profiles, setProfiles] = useState<KmetaPublicProfile[] | null>(null);
+  const [available, setAvailable] = useState(true);
+  useEffect(() => {
+    if (!enabled) { setProfiles(null); return; }
+    let cancelled = false;
+    getDocs(collection(kmetaDb, 'publicProfiles'))
+      .then(snap => { if (!cancelled) { setProfiles(snap.docs.map(d => ({ slug: d.id, ...d.data() } as KmetaPublicProfile))); setAvailable(true); } })
+      .catch(() => { if (!cancelled) { setProfiles(null); setAvailable(false); } });
+    return () => { cancelled = true; };
+  }, [enabled]);
+  return { profiles, available };
+}
+
+// All trial requests across tutors (collection-group).
+export function useKmetaBookingRequests(enabled: boolean) {
+  const [requests, setRequests] = useState<KmetaBookingRequest[] | null>(null);
+  const [available, setAvailable] = useState(true);
+  useEffect(() => {
+    if (!enabled) { setRequests(null); return; }
+    let cancelled = false;
+    getDocs(collectionGroup(kmetaDb, 'bookingRequests'))
+      .then(snap => { if (!cancelled) { setRequests(snap.docs.map(d => d.data() as KmetaBookingRequest)); setAvailable(true); } })
+      .catch(() => { if (!cancelled) { setRequests(null); setAvailable(false); } });
+    return () => { cancelled = true; };
+  }, [enabled]);
+  return { requests, available };
+}
+
+// All page reports across tutors (collection-group).
+export function useKmetaPageReports(enabled: boolean) {
+  const [reports, setReports] = useState<KmetaPageReport[] | null>(null);
+  const [available, setAvailable] = useState(true);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!enabled) { setReports(null); return; }
+    let cancelled = false;
+    setLoading(true);
+    getDocs(collectionGroup(kmetaDb, 'pageReports'))
+      .then(snap => { if (!cancelled) { setReports(snap.docs.map(d => d.data() as KmetaPageReport)); setAvailable(true); } })
+      .catch(() => { if (!cancelled) { setReports(null); setAvailable(false); } })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [enabled]);
+  return { reports, available, loading };
+}
+
+// Count of trial students that converted (needs a collection-group index on
+// students.trial.outcome; `available` is false until that index exists).
+export function useKmetaConvertedTrials(enabled: boolean) {
+  const [count, setCount] = useState<number | null>(null);
+  const [available, setAvailable] = useState(true);
+  useEffect(() => {
+    if (!enabled) { setCount(null); return; }
+    let cancelled = false;
+    getCountFromServer(query(collectionGroup(kmetaDb, 'students'), where('trial.outcome', '==', 'converted')))
+      .then(agg => { if (!cancelled) { setCount(agg.data().count); setAvailable(true); } })
+      .catch(() => { if (!cancelled) { setCount(null); setAvailable(false); } });
+    return () => { cancelled = true; };
+  }, [enabled]);
+  return { count, available };
 }
