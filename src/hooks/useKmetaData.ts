@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, collectionGroup, getCountFromServer, getDocs, query, where } from 'firebase/firestore';
+import { collection, collectionGroup, doc, getCountFromServer, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { kmetaDb, kmetaAuth } from '../lib/firebase';
 import { toJsDate } from '../lib/date';
@@ -354,6 +354,7 @@ export interface KmetaBookingRequest {
 }
 
 export interface KmetaPageReport {
+  id?: string;
   slug?: string;
   uid?: string;
   reason?: string;   // 'fake' | 'abuse' | 'adult' | 'spam' | 'privacy' | 'cheating' | 'other'
@@ -430,4 +431,78 @@ export function useKmetaConvertedTrials(enabled: boolean) {
     return () => { cancelled = true; };
   }, [enabled]);
   return { count, available };
+}
+
+// ── Per-tutor (detail page) ─────────────────────────────────────────────────
+
+// One tutor's public booking page (publicProfiles/{slug}).
+export function useKmetaTutorPublicProfile(slug: string | undefined, enabled: boolean) {
+  const [profile, setProfile] = useState<KmetaPublicProfile | null>(null);
+  const [available, setAvailable] = useState(true);
+  useEffect(() => {
+    if (!enabled || !slug) { setProfile(null); return; }
+    let cancelled = false;
+    getDoc(doc(kmetaDb, 'publicProfiles', slug))
+      .then(snap => {
+        if (cancelled) return;
+        setProfile(snap.exists() ? ({ slug: snap.id, ...snap.data() } as KmetaPublicProfile) : null);
+        setAvailable(true);
+      })
+      .catch(() => { if (!cancelled) { setProfile(null); setAvailable(false); } });
+    return () => { cancelled = true; };
+  }, [slug, enabled]);
+  return { profile, available };
+}
+
+// One tutor's trial requests (newest first).
+export function useKmetaTutorBookingRequests(uid: string | undefined, enabled: boolean) {
+  const [requests, setRequests] = useState<KmetaBookingRequest[] | null>(null);
+  const [available, setAvailable] = useState(true);
+  useEffect(() => {
+    if (!enabled || !uid) { setRequests(null); return; }
+    let cancelled = false;
+    getDocs(collection(kmetaDb, 'users', uid, 'bookingRequests'))
+      .then(snap => {
+        if (cancelled) return;
+        const l = snap.docs.map(d => d.data() as KmetaBookingRequest);
+        l.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        setRequests(l);
+        setAvailable(true);
+      })
+      .catch(() => { if (!cancelled) { setRequests(null); setAvailable(false); } });
+    return () => { cancelled = true; };
+  }, [uid, enabled]);
+  return { requests, available };
+}
+
+// One tutor's page reports (newest first) + the single allowed write: status.
+export function useKmetaTutorReports(uid: string | undefined, enabled: boolean) {
+  const [reports, setReports] = useState<KmetaPageReport[] | null>(null);
+  const [available, setAvailable] = useState(true);
+
+  useEffect(() => {
+    if (!enabled || !uid) { setReports(null); return; }
+    let cancelled = false;
+    getDocs(collection(kmetaDb, 'users', uid, 'pageReports'))
+      .then(snap => {
+        if (cancelled) return;
+        const l = snap.docs.map(d => ({ id: d.id, ...d.data() } as KmetaPageReport));
+        l.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        setReports(l);
+        setAvailable(true);
+      })
+      .catch(() => { if (!cancelled) { setReports(null); setAvailable(false); } });
+    return () => { cancelled = true; };
+  }, [uid, enabled]);
+
+  const setStatus = useCallback(async (reportId: string, status: string, reviewNote?: string) => {
+    if (!uid) return;
+    const payload: { status: string; reviewedAt: string; reviewNote?: string } =
+      { status, reviewedAt: new Date().toISOString() };
+    if (reviewNote !== undefined) payload.reviewNote = reviewNote;
+    await updateDoc(doc(kmetaDb, 'users', uid, 'pageReports', reportId), payload);
+    setReports(prev => prev ? prev.map(r => (r.id === reportId ? { ...r, ...payload } : r)) : prev);
+  }, [uid]);
+
+  return { reports, available, setStatus };
 }
