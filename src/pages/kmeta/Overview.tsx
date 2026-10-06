@@ -248,7 +248,7 @@ export function KmetaOverview() {
           <div className="flex flex-wrap gap-2 mt-5">
             {[
               [`${revenue.newCount} нові`, 'bg-accent/10 text-accent'],
-              [`${revenue.renewals} продовж.`, 'bg-green/10 text-green'],
+              [`автосписання: ${revenue.renewals}`, 'bg-green/10 text-green'],
               [`${LEGACY_PRO_PAYMENTS} legacy`, 'bg-surface-hover text-text-muted'],
             ].map(([t, c]) => <span key={t} className={`px-2.5 py-1 rounded-full text-xs font-semibold ${c}`}>{t}</span>)}
           </div>

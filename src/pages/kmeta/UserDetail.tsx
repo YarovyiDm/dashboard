@@ -371,7 +371,7 @@ export function KmetaUserDetail() {
                 label={
                   <span>
                     {fmtDate(p.createdAt)}
-                    <span className={`ml-2 px-1.5 py-px rounded-full text-[10px] font-semibold ${p.isRenewal ? 'bg-green/10 text-green' : 'bg-accent/10 text-accent'}`}>{p.isRenewal ? 'renewal' : 'new'}</span>
+                    <span className={`ml-2 px-1.5 py-px rounded-full text-[10px] font-semibold ${p.isRenewal ? 'bg-green/10 text-green' : 'bg-accent/10 text-accent'}`}>{p.isRenewal ? 'auto-renew' : 'new'}</span>
                   </span>
                 }
                 value={<span className="font-bold text-text-primary">{Number(p.amount) || 0} {p.currency || 'UAH'}</span>}
