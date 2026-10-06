@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, LogIn, Crown, GraduationCap, Layers, BookOpen, CreditCard } from 'lucide-react';
-import { useKmetaUsers, useKmetaTutorCounts, isKmetaPro, planBadgeClass } from '../../hooks/useKmetaData';
+import { ArrowLeft, LogIn, GraduationCap, Layers, BookOpen, CreditCard } from 'lucide-react';
+import { useKmetaUsers, useKmetaTutorCounts, useKmetaTutorSubscriptions, kmetaEffectiveStatus, KMETA_STATUS_LABEL, statusBadgeClass } from '../../hooks/useKmetaData';
 import { toJsDate } from '../../lib/date';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -39,6 +39,7 @@ export function KmetaUserDetail() {
   const { uid } = useParams<{ uid: string }>();
   const { users, loading, connected, connect, error } = useKmetaUsers();
   const { counts, loading: countsLoading, available: countsAvailable } = useKmetaTutorCounts(uid, connected);
+  const { payments: subs } = useKmetaTutorSubscriptions(uid, connected);
 
   const user = useMemo(() => users.find(u => u.uid === uid), [users, uid]);
 
@@ -72,7 +73,7 @@ export function KmetaUserDetail() {
     );
   }
 
-  const pro = isKmetaPro(user);
+  const status = kmetaEffectiveStatus(user);
   const exp = toJsDate(user.proExpiresAt);
   const daysLeft = exp ? Math.ceil((exp.getTime() - Date.now()) / DAY) : null;
   const reminders = [user.remindBefore30 && '30 днів', user.remindBefore10 && '10 днів'].filter(Boolean).join(', ') || '—';
@@ -96,11 +97,9 @@ export function KmetaUserDetail() {
           <h1 className="text-xl font-bold text-text-primary">{user.name || 'No name'}</h1>
           <div className="text-sm text-text-secondary">{user.email}</div>
           <div className="flex gap-2 mt-1.5 items-center">
-            <span className={planBadgeClass(user.plan)}>{user.plan ?? 'free'}</span>
-            {pro && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber/15 text-amber rounded text-xs font-medium">
-                <Crown className="w-3 h-3" /> Pro{daysLeft !== null ? ` — ${daysLeft}d left` : ''}
-              </span>
+            <span className={statusBadgeClass(status)}>{KMETA_STATUS_LABEL[status]}</span>
+            {daysLeft !== null && daysLeft > 0 && (status === 'pro' || status === 'pro_ending') && (
+              <span className="text-xs text-text-muted">{daysLeft}d left</span>
             )}
           </div>
         </div>
@@ -115,9 +114,9 @@ export function KmetaUserDetail() {
         </Block>
 
         <Block title="Subscription">
-          <Row label="Plan" value={<span className={planBadgeClass(user.plan)}>{user.plan ?? 'free'}</span>} />
-          <Row label="Pro status" value={pro ? <span className="text-amber">Active{daysLeft !== null ? ` — ${daysLeft}d left` : ''}</span> : <span className="text-text-muted">Inactive</span>} />
-          <Row label="Pro expires" value={fmtDate(user.proExpiresAt)} />
+          <Row label="Status" value={<span className={statusBadgeClass(status)}>{KMETA_STATUS_LABEL[status]}</span>} />
+          <Row label="Raw plan" value={user.plan ?? 'free'} />
+          <Row label="Pro expires" value={daysLeft !== null && daysLeft > 0 ? `${fmtDate(user.proExpiresAt)} · ${daysLeft}d` : fmtDate(user.proExpiresAt)} />
           <Row label="Last payment" value={fmtDateTime(user.lastPaymentAt)} />
           <Row label="Auto-renew" value={user.autoRenew === undefined ? '—' : user.autoRenew ? 'Yes' : 'No'} />
           <Row label="Order ref" value={<span className="font-mono text-xs">{user.subscriptionOrderRef || '—'}</span>} />
@@ -130,6 +129,25 @@ export function KmetaUserDetail() {
           <Row label={<span className="inline-flex items-center gap-2"><CreditCard className="w-4 h-4" /> Payments</span>} value={cnt(counts?.payments)} />
         </Block>
       </div>
+
+      {subs && subs.length > 0 && (
+        <div className="mt-4">
+          <Block title={`Subscription payments (${subs.length})`}>
+            {subs.map((p, i) => (
+              <Row
+                key={p.orderReference || i}
+                label={
+                  <span>
+                    {fmtDate(p.createdAt)}
+                    <span className="text-text-muted ml-2">{p.isRenewal ? 'renewal' : 'new'}</span>
+                  </span>
+                }
+                value={<span className="text-green">{Number(p.amount) || 0} {p.currency || 'UAH'}</span>}
+              />
+            ))}
+          </Block>
+        </div>
+      )}
 
       <div className="mt-4 text-xs text-text-muted">
         UID: <span className="font-mono">{user.uid}</span>

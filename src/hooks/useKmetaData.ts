@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, count, getAggregateFromServer, getCountFromServer, getDocs, query, sum } from 'firebase/firestore';
+import { collection, collectionGroup, getCountFromServer, getDocs, query } from 'firebase/firestore';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { kmetaDb, kmetaAuth } from '../lib/firebase';
 import { toJsDate } from '../lib/date';
@@ -23,14 +23,46 @@ export interface KmetaUser {
   subscriptionOrderRef?: string;
 }
 
-// Has Pro access right now — true while the subscription hasn't lapsed, which
-// also covers a 'cancelled' plan still within its paid period.
-export function isKmetaPro(u: KmetaUser): boolean {
+export type KmetaStatus = 'free' | 'pro' | 'pro_ending' | 'cancelled';
+
+// Effective subscription status, derived the same way the kmeta app does:
+// 'cancelled' plan or a lapsed 'pro' → cancelled; 'pro' with autoRenew off →
+// pro_ending; otherwise pro; anything else → free.
+export function kmetaEffectiveStatus(u: KmetaUser): KmetaStatus {
+  if (!u.plan || u.plan === 'free') return 'free';
+  if (u.plan === 'cancelled') return 'cancelled';
   const exp = toJsDate(u.proExpiresAt);
-  return exp ? exp.getTime() > Date.now() : false;
+  if (!exp || exp.getTime() <= Date.now()) return 'cancelled';
+  if (u.autoRenew === false) return 'pro_ending';
+  return 'pro';
 }
 
-// Tailwind classes for a plan pill (shared by the Overview and Users pages).
+// Currently has Pro access (active or ending, not lapsed/cancelled).
+export function isKmetaPro(u: KmetaUser): boolean {
+  const s = kmetaEffectiveStatus(u);
+  return s === 'pro' || s === 'pro_ending';
+}
+
+export const KMETA_STATUS_LABEL: Record<KmetaStatus, string> = {
+  free: 'Free',
+  pro: 'Pro',
+  pro_ending: 'Pro ending',
+  cancelled: 'Cancelled',
+};
+
+const STATUS_TONE: Record<KmetaStatus, string> = {
+  pro: 'bg-amber/15 text-amber',
+  pro_ending: 'bg-blue/15 text-blue',
+  cancelled: 'bg-red/15 text-red',
+  free: 'bg-surface-hover text-text-muted',
+};
+
+// Pill classes for an effective status (shared by Overview, Users, detail).
+export function statusBadgeClass(s: KmetaStatus): string {
+  return `inline-block px-1.5 py-0.5 rounded text-xs ${STATUS_TONE[s]}`;
+}
+
+// Back-compat: a pill for the raw `plan` value.
 export function planBadgeClass(plan?: string): string {
   const tone: Record<string, string> = {
     pro: 'bg-amber/15 text-amber',
@@ -218,47 +250,71 @@ export function useKmetaTutorCounts(uid: string | undefined, enabled: boolean) {
   return { counts, loading, available };
 }
 
-// Platform subscription revenue — per-tutor sum + count of the
-// users/{uid}/subscriptionPayments logs (kmeta's own income from Pro), via
-// server-side aggregation. Empty for tutors who never paid. Distinct from
-// paymentLogs (which is tutors' lesson income from students).
-export function useKmetaSubscriptionRevenue(users: KmetaUser[], enabled: boolean) {
-  const [data, setData] = useState<{ total: number; count: number } | null>(null);
+// One Kmeta Pro payment (subscriptionPayments doc) = platform revenue.
+export interface KmetaSubPayment {
+  amount?: number;
+  currency?: string;       // 'UAH' | 'EUR'
+  status?: string;         // 'paid'
+  createdAt?: string;
+  orderReference?: string;
+  productType?: string;    // 'pro'
+  periodStart?: string;
+  periodEnd?: string;
+  isRenewal?: boolean;
+  provider?: string;       // 'creem' (RO)
+}
+
+// All subscription payments across every tutor, in one collection-group read.
+// Compute totals (by currency, new vs renewal, by period) from the returned list.
+export function useKmetaRevenue(enabled: boolean) {
+  const [payments, setPayments] = useState<KmetaSubPayment[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [available, setAvailable] = useState(true);
 
   useEffect(() => {
-    if (!enabled || !users.length) {
-      setData(null);
+    if (!enabled) {
+      setPayments(null);
       setLoading(false);
       return;
     }
     let cancelled = false;
     setLoading(true);
-    (async () => {
-      try {
-        const per = await Promise.all(users.map(u =>
-          getAggregateFromServer(collection(kmetaDb, 'users', u.uid, 'subscriptionPayments'), {
-            total: sum('amount'),
-            count: count(),
-          }).then(agg => ({ total: agg.data().total ?? 0, count: agg.data().count }))
-        ));
+    getDocs(collectionGroup(kmetaDb, 'subscriptionPayments'))
+      .then(snap => {
         if (cancelled) return;
-        setData({
-          total: per.reduce((s, p) => s + (p.total || 0), 0),
-          count: per.reduce((s, p) => s + p.count, 0),
-        });
+        setPayments(snap.docs.map(d => d.data() as KmetaSubPayment));
         setAvailable(true);
-      } catch {
-        if (cancelled) return;
-        setData(null);
-        setAvailable(false);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+      })
+      .catch(() => { if (!cancelled) { setPayments(null); setAvailable(false); } })
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [users, enabled]);
+  }, [enabled]);
 
-  return { data, loading, available };
+  return { payments, loading, available };
+}
+
+// One tutor's subscription payment history (newest first), for the detail page.
+export function useKmetaTutorSubscriptions(uid: string | undefined, enabled: boolean) {
+  const [payments, setPayments] = useState<KmetaSubPayment[] | null>(null);
+  const [available, setAvailable] = useState(true);
+
+  useEffect(() => {
+    if (!enabled || !uid) {
+      setPayments(null);
+      return;
+    }
+    let cancelled = false;
+    getDocs(collection(kmetaDb, 'users', uid, 'subscriptionPayments'))
+      .then(snap => {
+        if (cancelled) return;
+        const list = snap.docs.map(d => d.data() as KmetaSubPayment);
+        list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        setPayments(list);
+        setAvailable(true);
+      })
+      .catch(() => { if (!cancelled) { setPayments(null); setAvailable(false); } });
+    return () => { cancelled = true; };
+  }, [uid, enabled]);
+
+  return { payments, available };
 }

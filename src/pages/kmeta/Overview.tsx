@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Users, Crown, UserPlus, LogIn, BookOpen, Layers, GraduationCap, DollarSign } from 'lucide-react';
 import { StatCard } from '../../components/StatCard';
-import { useKmetaUsers, useKmetaSubcounts, useKmetaSubscriptionRevenue, isKmetaPro } from '../../hooks/useKmetaData';
+import { useKmetaUsers, useKmetaSubcounts, useKmetaRevenue, isKmetaPro, kmetaEffectiveStatus } from '../../hooks/useKmetaData';
 import { toDayMonth, toJsDate } from '../../lib/date';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -18,7 +18,7 @@ const TOTAL_TAX = 0.06;
 export function KmetaOverview() {
   const { users, loading, connected, connect, error } = useKmetaUsers();
   const { totals, loading: countsLoading, available: countsAvailable } = useKmetaSubcounts(users);
-  const { data: subRev, available: subRevAvailable } = useKmetaSubscriptionRevenue(users, connected);
+  const { payments: subPayments } = useKmetaRevenue(connected);
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -30,15 +30,11 @@ export function KmetaOverview() {
     }).length;
     const proUsers = users.filter(isKmetaPro).length;
 
-    const planCounts = { free: 0, pro: 0, cancelled: 0, other: 0 };
-    users.forEach(u => {
-      if (u.plan === 'free') planCounts.free++;
-      else if (u.plan === 'pro') planCounts.pro++;
-      else if (u.plan === 'cancelled') planCounts.cancelled++;
-      else planCounts.other++;
-    });
+    const statusCounts: Record<'free' | 'pro' | 'pro_ending' | 'cancelled', number> =
+      { free: 0, pro: 0, pro_ending: 0, cancelled: 0 };
+    users.forEach(u => { statusCounts[kmetaEffectiveStatus(u)]++; });
 
-    return { totalUsers: users.length, proUsers, newThisWeek, planCounts };
+    return { totalUsers: users.length, proUsers, newThisWeek, statusCounts };
   }, [users]);
 
   const chartData = useMemo(() => {
@@ -57,6 +53,27 @@ export function KmetaOverview() {
     });
     return Object.entries(days).map(([date, count]) => ({ date: toDayMonth(date), count }));
   }, [users]);
+
+  // Subscription revenue from the collection-group read, split by currency and
+  // new vs renewal, plus the fixed legacy UAH baseline for pre-logging payments.
+  const revenue = useMemo(() => {
+    const list = subPayments ?? [];
+    let uahLogged = 0, eur = 0, renewals = 0, newLogged = 0;
+    list.forEach(p => {
+      const amt = Number(p.amount) || 0;
+      if (p.currency === 'EUR') eur += amt; else uahLogged += amt;
+      if (p.isRenewal) renewals++; else newLogged++;
+    });
+    const uahGross = LEGACY_PRO_PAYMENTS * PRO_PRICE + uahLogged;
+    return {
+      uahGross,
+      uahNet: uahGross * WAYFORPAY_PAYOUT_RATIO * (1 - TOTAL_TAX),
+      eur,
+      paymentsCount: LEGACY_PRO_PAYMENTS + list.length,
+      newCount: LEGACY_PRO_PAYMENTS + newLogged,
+      renewals,
+    };
+  }, [subPayments]);
 
   if (!connected) {
     return (
@@ -104,14 +121,6 @@ export function KmetaOverview() {
 
   const total = (n: number): string | number => (!countsAvailable ? '—' : countsLoading ? '…' : n);
 
-  // Revenue = logged subscription payments + a fixed legacy baseline for the
-  // pre-logging payments. Net strips WayForPay's fee and taxes.
-  const realGross = subRevAvailable && subRev ? subRev.total : 0;
-  const realCount = subRevAvailable && subRev ? subRev.count : 0;
-  const grossRevenue = LEGACY_PRO_PAYMENTS * PRO_PRICE + realGross;
-  const paymentsCount = LEGACY_PRO_PAYMENTS + realCount;
-  const netRevenue = grossRevenue * WAYFORPAY_PAYOUT_RATIO * (1 - TOTAL_TAX);
-
   return (
     <div>
       <h1 className="text-2xl font-bold text-text-primary mb-6">Kmeta Overview</h1>
@@ -130,16 +139,18 @@ export function KmetaOverview() {
             <span className="text-text-secondary text-sm">Revenue</span>
             <span className="text-text-muted"><DollarSign className="w-5 h-5" /></span>
           </div>
-          <div className="text-2xl font-semibold text-text-primary">{Math.round(grossRevenue).toLocaleString()} UAH</div>
+          <div className="text-2xl font-semibold text-text-primary">
+            {Math.round(revenue.uahGross).toLocaleString()} UAH{revenue.eur > 0 ? ` · ${Math.round(revenue.eur).toLocaleString()} EUR` : ''}
+          </div>
           <div className="mt-2 text-xs text-text-muted">
-            {paymentsCount} оплат · {LEGACY_PRO_PAYMENTS} legacy + {realCount} з логів
+            {revenue.paymentsCount} оплат · {revenue.newCount} нові / {revenue.renewals} продовж. · {LEGACY_PRO_PAYMENTS} legacy
           </div>
         </div>
         <div className="bg-surface-card border border-border rounded-xl p-5">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-text-secondary text-sm">Net (after fees & tax)</span>
+            <span className="text-text-secondary text-sm">Net UAH (after fees & tax)</span>
           </div>
-          <div className="text-2xl font-semibold text-green">{Math.round(netRevenue).toLocaleString()} UAH</div>
+          <div className="text-2xl font-semibold text-green">{Math.round(revenue.uahNet).toLocaleString()} UAH</div>
           <div className="mt-2 text-xs text-text-muted">
             WayForPay 146/149 · −5% ФОП −1% ЗЗ
           </div>
@@ -162,26 +173,24 @@ export function KmetaOverview() {
 
       {/* Plan breakdown */}
       <div className="bg-surface-card border border-border rounded-xl p-5 mb-8">
-        <h2 className="text-sm text-text-secondary mb-3">Plans</h2>
+        <h2 className="text-sm text-text-secondary mb-3">Subscription status</h2>
         <div className="flex flex-wrap gap-x-8 gap-y-4">
           <div>
-            <div className="text-lg font-semibold text-text-primary">{stats.planCounts.free}</div>
+            <div className="text-lg font-semibold text-text-primary">{stats.statusCounts.free}</div>
             <div className="text-xs text-text-muted">Free</div>
           </div>
           <div>
-            <div className="text-lg font-semibold text-amber">{stats.planCounts.pro}</div>
+            <div className="text-lg font-semibold text-amber">{stats.statusCounts.pro}</div>
             <div className="text-xs text-text-muted">Pro</div>
           </div>
           <div>
-            <div className="text-lg font-semibold text-red">{stats.planCounts.cancelled}</div>
+            <div className="text-lg font-semibold text-blue">{stats.statusCounts.pro_ending}</div>
+            <div className="text-xs text-text-muted">Pro ending</div>
+          </div>
+          <div>
+            <div className="text-lg font-semibold text-red">{stats.statusCounts.cancelled}</div>
             <div className="text-xs text-text-muted">Cancelled</div>
           </div>
-          {stats.planCounts.other > 0 && (
-            <div>
-              <div className="text-lg font-semibold text-text-primary">{stats.planCounts.other}</div>
-              <div className="text-xs text-text-muted">Other</div>
-            </div>
-          )}
         </div>
       </div>
 
