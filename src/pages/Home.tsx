@@ -1,6 +1,6 @@
-import { LayoutGrid, LogOut, Footprints } from 'lucide-react';
+import { LogOut, Footprints } from 'lucide-react';
 import { ProjectCard } from '../components/ProjectCard';
-import { KmetaMark } from '../components/BrandMarks';
+import { KmetaMark, AppMark } from '../components/BrandMarks';
 import { useAuth } from '../hooks/useAuth';
 import { useKrokyUsers, useKrokyPayments } from '../hooks/useKrokyData';
 import { useKmetaUsers, useKmetaRevenue, isKmetaPro } from '../hooks/useKmetaData';
@@ -41,9 +41,7 @@ export function Home() {
         {/* Top bar */}
         <header className="k-fade flex items-center justify-between gap-3 h-16">
           <div className="flex items-center gap-2.5">
-            <span className="grid place-items-center w-9 h-9 rounded-xl bg-accent text-[#1d1503] shadow-[0_6px_20px_-6px_var(--k-gold-glow)]">
-              <LayoutGrid className="w-4.5 h-4.5" />
-            </span>
+            <AppMark className="w-9 h-9 drop-shadow-[0_6px_16px_rgba(255,197,82,0.25)]" />
             <span className="text-lg font-extrabold tracking-tight text-text-primary">Dashboard</span>
           </div>
           {user && (

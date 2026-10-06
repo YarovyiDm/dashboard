@@ -1,6 +1,5 @@
 import { useAuth } from '../hooks/useAuth';
-import { LayoutGrid } from 'lucide-react';
-import { KmetaMark, KrokyMark } from '../components/BrandMarks';
+import { KmetaMark, KrokyMark, AppMark } from '../components/BrandMarks';
 import { GOLD, stagger } from '../lib/theme';
 
 export function Login() {
@@ -11,9 +10,9 @@ export function Login() {
       <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] w-[640px] h-[640px] rounded-full blur-3xl opacity-[0.09]" style={{ background: GOLD }} />
 
       <div className="relative w-full max-w-sm text-center">
-        <span className="k-rise mx-auto grid place-items-center w-16 h-16 rounded-2xl bg-accent text-[#1d1503] shadow-[0_14px_40px_-10px_var(--k-gold-glow)] mb-7">
-          <LayoutGrid className="w-7 h-7" />
-        </span>
+        <div className="k-rise mx-auto w-20 h-20 mb-7">
+          <AppMark className="w-20 h-20 drop-shadow-[0_14px_36px_rgba(255,197,82,0.3)]" />
+        </div>
         <h1 className="k-rise text-4xl font-extrabold tracking-tight text-text-primary mb-2" style={stagger(1)}>
           Dashboard
         </h1>

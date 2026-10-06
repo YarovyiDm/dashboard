@@ -11,8 +11,8 @@
 <rect width="512" height="512" rx="112" fill="url(#bg)" /><rect width="512" height="512" rx="112" fill="url(#glow)" />
 <g clip-path="url(#c)"><g transform="translate(256 256) scale(1.0) translate(-251 -263)">
 <path d="M104 360 L196 282 L270 318 L398 166 L398 430 L104 430 Z" fill="url(#area)" mask="url(#m)"/>
-<path d="M104 360 L196 282 L270 318 L398 166" fill="none" stroke="url(#ln)" stroke-width="60" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="398" cy="166" r="54" fill="#ffc552" fill-opacity=".22"/>
-<circle cx="398" cy="166" r="38" fill="#ffe29a"/>
+<path d="M104 360 L196 282 L270 318 L398 166" fill="none" stroke="url(#ln)" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="398" cy="166" r="46" fill="#ffc552" fill-opacity=".22"/>
+<circle cx="398" cy="166" r="30" fill="#ffe29a"/>
 </g></g><rect x="5" y="5" width="502" height="502" rx="107" fill="none" stroke="#ffc552" stroke-opacity=".28" stroke-width="10"/>
 </svg>

@@ -19,3 +19,8 @@ export function KrokyMark({ className = 'w-6 h-6' }: { className?: string }) {
     </span>
   );
 }
+
+// Dashboard app mark — same artwork as the favicon / PWA icon (public/logo.svg).
+export function AppMark({ className = 'w-9 h-9' }: { className?: string }) {
+  return <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" className={`shrink-0 ${className}`} />;
+}
