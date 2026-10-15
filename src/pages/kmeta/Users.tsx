@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Globe, AlertTriangle, Search, X, SlidersHorizontal, GraduationCap, Layers, BookOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Globe, AlertTriangle, Search, X, SlidersHorizontal, GraduationCap, Layers, BookOpen, Cat } from 'lucide-react';
 import {
   useKmetaUsers, useKmetaSubcounts, useKmetaPageReports, useKmetaPublicProfiles,
   kmetaEffectiveStatus, statusBadgeClass, KMETA_STATUS_LABEL, kmetaAcquisitionChannel,
-  type TutorCounts, type KmetaStatus, type KmetaChannel,
+  kmetaPet, kmetaAcademy, KMETA_ACADEMY_STAGE_LABEL,
+  type TutorCounts, type KmetaStatus, type KmetaChannel, type KmetaPetStatus, type KmetaAcademySummary,
 } from '../../hooks/useKmetaData';
 import { toDayMonthYear, toJsDate } from '../../lib/date';
 import { usePersistentState, oneOf } from '../../hooks/usePersistentState';
@@ -15,12 +16,19 @@ const SITE = 'https://kmeta.com.ua';
 
 type StatusFilter = 'all' | KmetaStatus;
 type ChannelFilter = 'all' | 'ads' | 'organic' | 'direct';
+type PetFilter = 'all' | KmetaPetStatus;
+type AcademyFilter = 'all' | 'none' | 'progress' | 'completed';
+// Stage sub-filter for «in progress»; 'unknown' = joined before the app wrote a progress summary.
+type StageFilter = 'all' | 'foundation' | 'showcase' | 'students' | 'records' | 'growth' | 'unknown';
 type SortField = 'registered' | 'students' | 'groups' | 'lessons';
 type SortDir = 'asc' | 'desc';
 const PAGE_SIZE = 10;
 
 const STATUS_VALUES = ['all', 'free', 'pro', 'pro_ending', 'cancelled'] as const;
 const CHANNEL_VALUES = ['all', 'ads', 'organic', 'direct'] as const;
+const PET_VALUES = ['all', 'on', 'hidden', 'unseen'] as const;
+const ACADEMY_VALUES = ['all', 'none', 'progress', 'completed'] as const;
+const STAGE_VALUES = ['all', 'foundation', 'showcase', 'students', 'records', 'growth', 'unknown'] as const;
 const SORT_FIELDS = ['registered', 'students', 'groups', 'lessons'] as const;
 const SORT_DIRS = ['asc', 'desc'] as const;
 const isBool = (v: unknown): v is boolean => typeof v === 'boolean';
@@ -42,6 +50,40 @@ const CHANNEL_FILTERS: { v: ChannelFilter; label: string }[] = [
   { v: 'direct', label: 'Dir' },
 ];
 
+const PET_FILTERS: { v: PetFilter; label: string }[] = [
+  { v: 'all', label: 'Усі' },
+  { v: 'on', label: 'Є' },
+  { v: 'hidden', label: 'Приховали' },
+  { v: 'unseen', label: 'Не бачив' },
+];
+const ACADEMY_FILTERS: { v: AcademyFilter; label: string }[] = [
+  { v: 'all', label: 'Усі' },
+  { v: 'none', label: 'Не в ній' },
+  { v: 'progress', label: 'В процесі' },
+  { v: 'completed', label: 'Пройшли' },
+];
+const STAGE_FILTERS: { v: StageFilter; label: string }[] = [
+  { v: 'all', label: 'Усі етапи' },
+  { v: 'foundation', label: '1 Фундамент' },
+  { v: 'showcase', label: '2 Вітрина' },
+  { v: 'students', label: '3 Перші учні' },
+  { v: 'records', label: '4 Облік' },
+  { v: 'growth', label: '5 Ріст' },
+  { v: 'unknown', label: '—' },
+];
+
+function academyBadge(a: KmetaAcademySummary | null) {
+  if (!a) return null;
+  const text = a.completed
+    ? 'Академія · Пройдено 🎓'
+    : `Академія · ${a.stage ? KMETA_ACADEMY_STAGE_LABEL[a.stage].replace(' · ', ' ') : '—'} · ${a.done}/${a.total}`;
+  return (
+    <span className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold ${a.completed ? 'bg-accent/15 text-accent' : 'bg-blue/12 text-blue'}`}>
+      <GraduationCap className="w-3 h-3" /> {text}
+    </span>
+  );
+}
+
 function channelPill(ch: KmetaChannel) {
   if (ch === 'unknown') return null;
   const tone = ch === 'ads' ? 'bg-blue/15 text-blue' : ch === 'organic' ? 'bg-green/15 text-green' : 'bg-surface-hover text-text-muted';
@@ -59,6 +101,9 @@ export function KmetaUsers() {
   const [channelFilter, setChannelFilter] = usePersistentState<ChannelFilter>(K + 'channel', 'all', oneOf(CHANNEL_VALUES));
   const [pageOnly, setPageOnly] = usePersistentState(K + 'pageOnly', false, isBool);
   const [newReportsOnly, setNewReportsOnly] = usePersistentState(K + 'newReportsOnly', false, isBool);
+  const [petFilter, setPetFilter] = usePersistentState<PetFilter>(K + 'pet', 'all', oneOf(PET_VALUES));
+  const [academyFilter, setAcademyFilter] = usePersistentState<AcademyFilter>(K + 'academy', 'all', oneOf(ACADEMY_VALUES));
+  const [stageFilter, setStageFilter] = usePersistentState<StageFilter>(K + 'academyStage', 'all', oneOf(STAGE_VALUES));
   const [sortField, setSortField] = usePersistentState<SortField>(K + 'sortField', 'registered', oneOf(SORT_FIELDS));
   const [sortDir, setSortDir] = usePersistentState<SortDir>(K + 'sortDir', 'desc', oneOf(SORT_DIRS));
   const [page, setPage] = usePersistentState(K + 'page', 1, isPage);
@@ -109,12 +154,24 @@ export function KmetaUsers() {
     if (channelFilter !== 'all') list = list.filter(u => kmetaAcquisitionChannel(u) === channelFilter);
     if (pageOnly) list = list.filter(u => !!u.publicSlug);
     if (newReportsOnly) list = list.filter(u => (reportsByUid.get(u.uid)?.newCount ?? 0) > 0);
+    if (petFilter !== 'all') list = list.filter(u => kmetaPet(u) === petFilter);
+    if (academyFilter !== 'all') {
+      list = list.filter(u => {
+        const a = kmetaAcademy(u);
+        if (academyFilter === 'none') return !a;
+        if (academyFilter === 'completed') return !!a?.completed;
+        if (!a || a.completed) return false;
+        return stageFilter === 'all' || (stageFilter === 'unknown' ? !a.stage : a.stage === stageFilter);
+      });
+    }
     return list;
-  }, [users, counts, search, statusFilter, channelFilter, pageOnly, newReportsOnly, reportsByUid, sortField, sortDir]);
+  }, [users, counts, search, statusFilter, channelFilter, pageOnly, newReportsOnly, petFilter, academyFilter, stageFilter, reportsByUid, sortField, sortDir]);
 
   // Back to page 1 when filters change — but not on mount, so the restored
   // page survives opening a tutor and coming back.
-  const filterKey = JSON.stringify([search, statusFilter, channelFilter, pageOnly, newReportsOnly, sortField, sortDir]);
+  // The stage only matters while «in progress» is picked.
+  const activeStage = academyFilter === 'progress' ? stageFilter : 'all';
+  const filterKey = JSON.stringify([search, statusFilter, channelFilter, pageOnly, newReportsOnly, petFilter, academyFilter, activeStage, sortField, sortDir]);
   const lastFilterKey = useRef(filterKey);
   useEffect(() => {
     if (lastFilterKey.current === filterKey) return;
@@ -122,9 +179,11 @@ export function KmetaUsers() {
     setPage(1);
   }, [filterKey, setPage]);
 
-  const activeFilters = (statusFilter !== 'all' ? 1 : 0) + (channelFilter !== 'all' ? 1 : 0) + (pageOnly ? 1 : 0) + (newReportsOnly ? 1 : 0) + (search ? 1 : 0);
+  const activeFilters = (statusFilter !== 'all' ? 1 : 0) + (channelFilter !== 'all' ? 1 : 0) + (pageOnly ? 1 : 0) + (newReportsOnly ? 1 : 0) + (search ? 1 : 0)
+    + (petFilter !== 'all' ? 1 : 0) + (academyFilter !== 'all' ? 1 : 0) + (activeStage !== 'all' ? 1 : 0);
   const resetFilters = () => {
     setSearch(''); setStatusFilter('all'); setChannelFilter('all'); setPageOnly(false); setNewReportsOnly(false);
+    setPetFilter('all'); setAcademyFilter('all'); setStageFilter('all');
   };
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -158,8 +217,9 @@ export function KmetaUsers() {
     <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted">{label}</th>
   );
 
-  const segmented = <T extends string>(opts: { v: T; label: string }[], value: T, set: (v: T) => void) => (
-    <div className="flex shrink-0 bg-surface-card border border-border rounded-xl p-1">
+  const segmented = <T extends string>(opts: { v: T; label: string }[], value: T, set: (v: T) => void, lead?: ReactNode) => (
+    <div className="flex items-center shrink-0 bg-surface-card border border-border rounded-xl p-1">
+      {lead && <span className="pl-2 pr-1 text-text-muted [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>{lead}</span>}
       {opts.map(o => (
         <button
           key={o.v}
@@ -242,12 +302,20 @@ export function KmetaUsers() {
           {segmented(CHANNEL_FILTERS, channelFilter, setChannelFilter)}
           {toggle(pageOnly, () => setPageOnly(v => !v), <><Globe className="w-3.5 h-3.5" /> Page</>, 'Has a booking page')}
           {toggle(newReportsOnly, () => setNewReportsOnly(v => !v), <><AlertTriangle className="w-3.5 h-3.5" /> Reports</>, 'Has new (unreviewed) page reports', true)}
+          {segmented(PET_FILTERS, petFilter, setPetFilter, <Cat />)}
+          {segmented(ACADEMY_FILTERS, academyFilter, setAcademyFilter, <GraduationCap />)}
           {activeFilters > 0 && (
             <button onClick={resetFilters} className="k-chip k-fade shrink-0 inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold rounded-xl text-text-muted hover:text-red">
               <X className="w-3.5 h-3.5" /> Скинути ({activeFilters})
             </button>
           )}
         </div>
+        {academyFilter === 'progress' && (
+          <div className="k-fade k-rail flex items-center gap-2 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted shrink-0">Етап</span>
+            {segmented(STAGE_FILTERS, stageFilter, setStageFilter)}
+          </div>
+        )}
         {/* Mobile sort */}
         <div className="md:hidden flex items-center gap-2 text-xs">
           <SlidersHorizontal className="w-3.5 h-3.5 text-text-muted" />
@@ -291,6 +359,7 @@ export function KmetaUsers() {
           {paginated.map((u, idx) => {
             const status = kmetaEffectiveStatus(u);
             const isPro = status === 'pro' || status === 'pro_ending';
+            const academy = kmetaAcademy(u);
             return (
               <Link key={u.uid} to={`/kmeta/users/${u.uid}`} className="k-card k-rise block p-3.5 active:scale-[0.99] transition-transform" style={stagger(idx)}>
                 <div className="flex items-center gap-3">
@@ -316,7 +385,12 @@ export function KmetaUsers() {
                     <span className={statusBadgeClass(status)}>{KMETA_STATUS_LABEL[status]}</span>
                   </div>
                 </div>
-                {u.specialization && <div className="text-xs text-text-muted mt-2 truncate">{u.specialization}</div>}
+                {(u.specialization || academy) && (
+                  <div className="flex items-center justify-between gap-2 mt-2 min-w-0">
+                    <span className="text-xs text-text-muted truncate">{u.specialization}</span>
+                    {academyBadge(academy)}
+                  </div>
+                )}
               </Link>
             );
           })}
@@ -356,6 +430,7 @@ export function KmetaUsers() {
                               <span className="truncate">{u.email}</span>
                               {channelPill(kmetaAcquisitionChannel(u))}
                             </div>
+                            {kmetaAcademy(u) && <div className="mt-1">{academyBadge(kmetaAcademy(u))}</div>}
                           </div>
                         </Link>
                         {pageLink(u.publicSlug)}

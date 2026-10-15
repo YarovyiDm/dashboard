@@ -2,13 +2,14 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, GraduationCap, Layers, BookOpen, CreditCard, ExternalLink, Flag, Info, Crown, Activity, Globe, Megaphone,
-  Receipt, Tag, Calendar, Copy, Check,
+  Receipt, Tag, Calendar, Copy, Check, Cat,
 } from 'lucide-react';
 import {
   useKmetaUsers, useKmetaTutorCounts, useKmetaTutorSubscriptions, kmetaEffectiveStatus,
   KMETA_STATUS_LABEL, statusBadgeClass, useKmetaTutorPublicProfile, useKmetaTutorBookingRequests,
   useKmetaTutorReports, kmetaAcquisitionChannel, KMETA_CHANNEL_LABEL,
-  type KmetaPageReport, type KmetaPublicProfile,
+  kmetaPet, kmetaAcademy, KMETA_PET_LABEL, KMETA_ACADEMY_STAGE_LABEL, KMETA_ACADEMY_LEVEL_LABEL, KMETA_ACADEMY_STEP_STAGE,
+  type KmetaPageReport, type KmetaPublicProfile, type KmetaUser,
 } from '../../hooks/useKmetaData';
 import { toJsDate } from '../../lib/date';
 import { ConnectGate, LoadingSkeleton, Avatar, Panel, StackBar, AnimatedNumber } from '../../components/ui';
@@ -63,6 +64,87 @@ function Row({ label, value }: { label: ReactNode; value: ReactNode }) {
       <span className="text-sm text-text-muted shrink-0">{label}</span>
       <span className="text-sm font-medium text-text-primary text-right break-all">{value}</span>
     </div>
+  );
+}
+
+const PET_TONE = { on: 'text-accent', hidden: 'text-text-muted', unseen: 'text-text-secondary' } as const;
+const STAGE_ORDER = ['foundation', 'showcase', 'students', 'records', 'growth'] as const;
+
+// Done / skipped steps per stage, from the raw marks (a truthy mark = done, 'skip' = done by skipping).
+function academySteps(u: KmetaUser) {
+  const total: Record<string, number> = {};
+  Object.values(KMETA_ACADEMY_STEP_STAGE).forEach(st => { total[st] = (total[st] || 0) + 1; });
+  const done: Record<string, number> = {};
+  const skipped: Record<string, number> = {};
+  Object.entries(u.academy?.marks ?? {}).forEach(([id, v]) => {
+    if (!v) return;
+    const st = KMETA_ACADEMY_STEP_STAGE[id] ?? 'other';
+    if (v === 'skip') skipped[st] = (skipped[st] || 0) + 1;
+    else done[st] = (done[st] || 0) + 1;
+  });
+  return { total, done, skipped };
+}
+
+function AcademyBlock({ user, i }: { user: KmetaUser; i: number }) {
+  const a = kmetaAcademy(user);
+  if (!a) {
+    return (
+      <Block i={i} title="Академія" icon={<GraduationCap className="w-4 h-4" />}>
+        <Row label="Статус" value={<span className="text-text-muted">Не приєднався</span>} />
+      </Block>
+    );
+  }
+  const steps = academySteps(user);
+  const pct = a.total ? Math.round((a.done / a.total) * 100) : 0;
+  const other = (steps.done.other ?? 0) + (steps.skipped.other ?? 0);
+  return (
+    <Block i={i} title="Академія" icon={<GraduationCap className="w-4 h-4" />}
+      right={a.completed ? <span className="text-accent font-bold">Пройдено 🎓</span> : undefined}>
+      <Row label="Приєднався" value={fmtDateTime(a.joinedAt)} />
+      <Row label="Рівень" value={a.level ? KMETA_ACADEMY_LEVEL_LABEL[a.level] : '—'} />
+      <div className="px-4 sm:px-5 py-3">
+        <div className="flex items-baseline justify-between gap-3 mb-2">
+          <span className="text-sm text-text-muted">Прогрес</span>
+          <span className="text-sm font-medium text-text-primary text-right">
+            <span className="font-extrabold">{a.done}/{a.total}</span>
+            <span className="text-text-muted"> · {a.stage ? KMETA_ACADEMY_STAGE_LABEL[a.stage] : '—'}</span>
+          </span>
+        </div>
+        <div className="h-2 rounded-full bg-surface-hover overflow-hidden">
+          <div className="k-grow h-full rounded-full bg-accent" style={{ width: `${Math.max(2, pct)}%` }} />
+        </div>
+      </div>
+      <Row label="Пройдено" value={a.completedAt ? fmtDateTime(a.completedAt) : '—'} />
+      <Row label="Прогрес оновлено" value={a.updatedAt ? fmtDateTime(a.updatedAt) : <span className="text-text-muted">ще не синхронізовано</span>} />
+      {STAGE_ORDER.map(st => {
+        const d = steps.done[st] ?? 0, sk = steps.skipped[st] ?? 0;
+        return (
+          <Row
+            key={st}
+            label={KMETA_ACADEMY_STAGE_LABEL[st]}
+            value={
+              <span className={d + sk >= (steps.total[st] ?? 0) ? 'text-green' : undefined}>
+                {d + sk}/{steps.total[st] ?? 0}
+                {sk > 0 && <span className="text-text-muted font-normal"> · {sk} пропущено</span>}
+              </span>
+            }
+          />
+        );
+      })}
+      {other > 0 && <Row label="Невідомі кроки" value={other} />}
+    </Block>
+  );
+}
+
+function PetBlock({ user, i }: { user: KmetaUser; i: number }) {
+  const st = kmetaPet(user);
+  return (
+    <Block i={i} title="Кметик" icon={<Cat className="w-4 h-4" />}>
+      <Row label="Статус" value={<span className={PET_TONE[st]}>{KMETA_PET_LABEL[st]}</span>} />
+      <Row label="Вперше побачив" value={user.petSeenAt ? fmtDateTime(user.petSeenAt) : <span className="text-text-muted">не заходив з комп'ютера</span>} />
+      <Row label="Приховав" value={user.petHiddenAt ? fmtDateTime(user.petHiddenAt) : '—'} />
+      <Row label="Мяу (кліки)" value={user.petMeows ?? 0} />
+    </Block>
   );
 }
 
@@ -307,8 +389,11 @@ export function KmetaUserDetail() {
           <Row label="Paywall views" value={user.paywallViews ?? 0} />
         </Block>
 
+        <AcademyBlock user={user} i={5} />
+        <PetBlock user={user} i={6} />
+
         <div className="md:col-span-2">
-          <Block i={5} title="Acquisition" icon={<Megaphone className="w-4 h-4" />}>
+          <Block i={7} title="Acquisition" icon={<Megaphone className="w-4 h-4" />}>
             <div className="grid md:grid-cols-2 md:divide-x divide-border/60">
               <div className="divide-y divide-border/60">
                 <Row label="Channel" value={<span className={channel === 'ads' ? 'text-blue' : channel === 'organic' ? 'text-green' : 'text-text-secondary'}>{KMETA_CHANNEL_LABEL[channel]}</span>} />
@@ -331,7 +416,7 @@ export function KmetaUserDetail() {
       </div>
 
       {requests && requests.length > 0 && (
-        <Panel i={6} className="mt-3 sm:mt-4" title={`Booking requests (${req.total})`} icon={<Calendar className="w-4 h-4" />}>
+        <Panel i={8} className="mt-3 sm:mt-4" title={`Booking requests (${req.total})`} icon={<Calendar className="w-4 h-4" />}>
           <StackBar segments={[
             { label: 'New', value: req.new, color: '#5cb8ff' },
             { label: 'Accepted', value: req.accepted, color: '#3ddc97' },
@@ -341,7 +426,7 @@ export function KmetaUserDetail() {
       )}
 
       {srcRows.length > 0 && (
-        <Panel i={7} className="mt-3 sm:mt-4" title="Tagged links" icon={<Tag className="w-4 h-4" />}>
+        <Panel i={9} className="mt-3 sm:mt-4" title="Tagged links" icon={<Tag className="w-4 h-4" />}>
           <div className="-mx-1">
             <div className="flex text-[11px] uppercase tracking-wider text-text-muted px-1 pb-2">
               <span className="flex-1">Source</span>
@@ -363,7 +448,7 @@ export function KmetaUserDetail() {
 
       {subs && subs.length > 0 && (
         <div className="mt-3 sm:mt-4">
-          <Block i={8} title={`Subscription payments (${subs.length})`} icon={<Receipt className="w-4 h-4" />}
+          <Block i={10} title={`Subscription payments (${subs.length})`} icon={<Receipt className="w-4 h-4" />}
             right={<span className="text-accent font-bold">{subs.reduce((s, p) => s + (Number(p.amount) || 0), 0).toLocaleString('uk-UA')} {subs[0]?.currency || 'UAH'}</span>}>
             {subs.map((p, i) => (
               <Row
@@ -383,14 +468,14 @@ export function KmetaUserDetail() {
 
       {reports && reports.length > 0 && (
         <div className="mt-3 sm:mt-4">
-          <Block i={9} title={`Page reports (${reports.length})`} icon={<Flag className="w-4 h-4" />}
+          <Block i={11} title={`Page reports (${reports.length})`} icon={<Flag className="w-4 h-4" />}
             right={newReports > 0 ? <span className="px-2 py-0.5 bg-red/15 text-red rounded-full text-xs font-bold">{newReports} new</span> : undefined}>
             {reports.map(r => <ReportCard key={r.id} report={r} onSetStatus={setStatus} />)}
           </Block>
         </div>
       )}
 
-      <div className="mt-5 k-fade" style={stagger(10)}>
+      <div className="mt-5 k-fade" style={stagger(12)}>
         <CopyUid uid={user.uid} />
       </div>
     </div>

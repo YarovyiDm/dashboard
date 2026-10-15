@@ -51,6 +51,25 @@ export interface KmetaUser {
   paywallViews?: number;
   // "What's new" feed: update id -> { seenAt, action }.
   updatesLog?: Record<string, { seenAt?: string; action?: string }>;
+  // «Кметик», the pet cat (desktop only, ≥768px). pet: false = hidden; missing/true = on.
+  pet?: boolean;
+  petSeenAt?: string;       // first time the cat was on screen
+  petHiddenAt?: string;     // only together with pet: false
+  petMeows?: number;        // clicks on the cat
+  // «Академія» — the tutor academy.
+  academy?: KmetaAcademyDoc;
+}
+
+export type KmetaAcademyLevel = 'new' | 'some' | 'many';
+export type KmetaAcademyStage = 'foundation' | 'showcase' | 'students' | 'records' | 'growth' | 'done';
+
+export interface KmetaAcademyDoc {
+  joinedAt?: string;
+  level?: KmetaAcademyLevel;
+  completedAt?: string;
+  marks?: Record<string, string | null>;   // stepId -> ISO | 'skip' | null; truthy = done
+  // Summary written by the app; missing for users who joined before it existed (until their next visit).
+  progress?: { done: number; total: number; stage: KmetaAcademyStage; updatedAt?: string };
 }
 
 export type KmetaStatus = 'free' | 'pro' | 'pro_ending' | 'cancelled';
@@ -65,6 +84,79 @@ export function kmetaEffectiveStatus(u: KmetaUser): KmetaStatus {
   if (!exp || exp.getTime() <= Date.now()) return 'cancelled';
   if (u.autoRenew === false) return 'pro_ending';
   return 'pro';
+}
+
+export type KmetaPetStatus = 'on' | 'hidden' | 'unseen';
+
+// The cat lives only on computers: no petSeenAt = never used Kmeta on a computer.
+export function kmetaPet(u: KmetaUser): KmetaPetStatus {
+  if (u.pet === false) return 'hidden';
+  return u.petSeenAt ? 'on' : 'unseen';
+}
+
+export const KMETA_PET_LABEL: Record<KmetaPetStatus, string> = {
+  on: 'Увімкнений',
+  hidden: 'Прихований',
+  unseen: 'Ще не бачив',
+};
+
+export const KMETA_ACADEMY_STAGES = ['foundation', 'showcase', 'students', 'records', 'growth', 'done'] as const;
+export const KMETA_ACADEMY_STAGE_LABEL: Record<KmetaAcademyStage, string> = {
+  foundation: '1 · Фундамент',
+  showcase: '2 · Вітрина',
+  students: '3 · Перші учні',
+  records: '4 · Облік',
+  growth: '5 · Ріст',
+  done: 'Пройдено 🎓',
+};
+export const KMETA_ACADEMY_LEVEL_LABEL: Record<KmetaAcademyLevel, string> = {
+  new: 'Тільки починаю',
+  some: 'Є кілька учнів',
+  many: 'Вже працюю',
+};
+// Step count of the programme — fallback total when the app hasn't written `progress` yet.
+export const KMETA_ACADEMY_TOTAL = 31;
+
+// Step id -> stage, mirrored from ACADEMY_TASKS in the kmeta app (src/lib/academy.ts).
+export const KMETA_ACADEMY_STEP_STAGE: Record<string, Exclude<KmetaAcademyStage, 'done'>> = {
+  niche: 'foundation', price: 'foundation', 'trial-plan': 'foundation', rules: 'foundation', workspace: 'foundation', legal: 'foundation',
+  'page-on': 'showcase', 'page-photo': 'showcase', 'page-bio': 'showcase', 'page-windows': 'showcase', 'page-preview': 'showcase',
+  'ask-friends': 'students', 'share-social': 'students', 'share-olx': 'students', 'share-chats': 'students', 'first-reply': 'students',
+  'first-request': 'students', 'first-trial': 'students', 'first-convert': 'students', sources: 'students',
+  'first-student': 'records', schedule: 'records', 'first-paid': 'records', reminders: 'records', install: 'records',
+  'first-package': 'growth', 'rules-sent': 'growth', 'five-students': 'growth', referrals: 'growth', review: 'growth', 'raise-price': 'growth',
+};
+
+export interface KmetaAcademySummary {
+  joinedAt: string;
+  level?: KmetaAcademyLevel;
+  done: number;
+  total: number;
+  /** null until the app writes `progress` (shown as «—»). */
+  stage: KmetaAcademyStage | null;
+  completed: boolean;
+  completedAt?: string;
+  updatedAt?: string;
+}
+
+// A user is in the academy once academy.joinedAt is set. Prefers the app's `progress` summary and
+// falls back to counting truthy marks (a 'skip' counts as done) out of 31, stage unknown.
+export function kmetaAcademy(u: KmetaUser): KmetaAcademySummary | null {
+  const a = u.academy;
+  if (!a?.joinedAt) return null;
+  const p = a.progress;
+  const done = p ? p.done : Object.values(a.marks ?? {}).filter(Boolean).length;
+  const completed = !!a.completedAt || p?.stage === 'done';
+  return {
+    joinedAt: a.joinedAt,
+    level: a.level,
+    done,
+    total: p?.total ?? KMETA_ACADEMY_TOTAL,
+    stage: p?.stage ?? (completed ? 'done' : null),
+    completed,
+    completedAt: a.completedAt,
+    updatedAt: p?.updatedAt,
+  };
 }
 
 // Currently has Pro access (active or ending, not lapsed/cancelled).

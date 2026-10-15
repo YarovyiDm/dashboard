@@ -2,11 +2,14 @@ import { useMemo } from 'react';
 import {
   Users, Crown, UserPlus, BookOpen, Layers, GraduationCap, Wallet, Globe, Calendar, UserCheck, Flag, Tag,
   Activity, Bell, Eye, TrendingUp, PieChart, Megaphone, Search, Sparkles, CalendarRange, Radio,
+  Cat, EyeOff, MousePointerClick, Award, Route,
 } from 'lucide-react';
 import {
   useKmetaUsers, useKmetaSubcounts, useKmetaRevenue, isKmetaPro, kmetaEffectiveStatus,
   useKmetaPublicProfiles, useKmetaBookingRequests, useKmetaPageReports, useKmetaConvertedTrials,
-  kmetaAcquisitionChannel, useKmetaPushTutors, type KmetaChannel,
+  kmetaAcquisitionChannel, useKmetaPushTutors, kmetaPet, kmetaAcademy,
+  KMETA_ACADEMY_STAGES, KMETA_ACADEMY_STAGE_LABEL, KMETA_ACADEMY_LEVEL_LABEL,
+  type KmetaChannel, type KmetaAcademyStage, type KmetaAcademyLevel,
 } from '../../hooks/useKmetaData';
 import { toDayMonth, toJsDate } from '../../lib/date';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -166,6 +169,38 @@ export function KmetaOverview() {
       paywall += u.paywallViews || 0;
     });
     return { active7, active30, paywall };
+  }, [users]);
+
+  // «Кметик»: on = seen on a computer and not hidden.
+  const pet = useMemo(() => {
+    let on = 0, hidden = 0, seen = 0, meows = 0;
+    users.forEach(u => {
+      const st = kmetaPet(u);
+      if (st === 'on') on++;
+      else if (st === 'hidden') hidden++;
+      if (u.petSeenAt) seen++;
+      meows += u.petMeows || 0;
+    });
+    return { on, hidden, seen, meows };
+  }, [users]);
+
+  // «Академія»: who joined, where they are now, and how they rated themselves at the start.
+  const academy = useMemo(() => {
+    const since30 = Date.now() - 30 * 86400000;
+    const byStage = Object.fromEntries(KMETA_ACADEMY_STAGES.map(st => [st, 0])) as Record<KmetaAcademyStage, number>;
+    const byLevel: Record<KmetaAcademyLevel | 'unknown', number> = { new: 0, some: 0, many: 0, unknown: 0 };
+    let joined = 0, completed = 0, recent = 0, unknownStage = 0;
+    users.forEach(u => {
+      const a = kmetaAcademy(u);
+      if (!a) return;
+      joined++;
+      if (a.completed) completed++;
+      const t = toJsDate(a.joinedAt)?.getTime();
+      if (t && t >= since30) recent++;
+      if (a.stage) byStage[a.stage]++; else unknownStage++;
+      byLevel[a.level ?? 'unknown']++;
+    });
+    return { joined, completed, recent, byStage, unknownStage, byLevel };
   }, [users]);
 
   const whatsNew = useMemo(() => {
@@ -405,7 +440,7 @@ export function KmetaOverview() {
         <Kpi i={26} compact label="Paywall views" value={engagement.paywall} icon={<Eye />} tone="gold" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mt-3 sm:mt-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mt-3 sm:mt-4">
         <Panel i={27} title="What's new" icon={<Sparkles className="w-4 h-4" />}>
           {whatsNew.length > 0 ? (
             <div className="-mx-1">
@@ -433,6 +468,51 @@ export function KmetaOverview() {
           }))} />
         </Panel>
       </div>
+
+      {/* Кметик — the pet cat (desktop only) */}
+      <SectionLabel i={29}>Кметик</SectionLabel>
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <Kpi i={30} compact label="З котиком" value={pet.on} icon={<Cat />} tone="gold"
+          hint={`з ${pet.seen} на комп'ютері`} />
+        <Kpi i={31} compact label="Приховали" value={pet.hidden} icon={<EyeOff />} tone="muted"
+          hint={pet.seen ? `${Math.round((pet.hidden / pet.seen) * 100)}% з тих, хто бачив` : undefined} />
+        <Kpi i={32} compact label="Мяу (кліки)" value={pet.meows} icon={<MousePointerClick />} tone="teal"
+          hint={pet.on ? `${(pet.meows / pet.on).toFixed(1)} на котика` : undefined} />
+      </div>
+
+      {/* Академія — the tutor academy */}
+      <SectionLabel i={33}>Академія</SectionLabel>
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <Kpi i={34} compact label="Приєднались" value={academy.joined} icon={<GraduationCap />} tone="blue"
+          hint={users.length ? `${Math.round((academy.joined / users.length) * 100)}% тьюторів` : undefined} />
+        <Kpi i={35} compact label="Пройшли" value={academy.completed} icon={<Award />} tone="gold"
+          hint={academy.joined ? `${Math.round((academy.completed / academy.joined) * 100)}% учасників` : undefined} />
+        <Kpi i={36} compact label="Нові за 30 днів" value={academy.recent} icon={<UserPlus />} tone="green" />
+      </div>
+      <Panel i={37} className="mt-3 sm:mt-4 mb-4" title="Де зараз учасники" icon={<Route className="w-4 h-4" />} right={`${academy.joined} в академії`}>
+        <div className="grid md:grid-cols-5 gap-6 items-start">
+          <div className="md:col-span-3">
+            <BarList
+              empty="Ще ніхто не приєднався"
+              rows={academy.joined === 0 ? [] : [
+                ...KMETA_ACADEMY_STAGES.map(st => ({ key: st, label: KMETA_ACADEMY_STAGE_LABEL[st], value: academy.byStage[st] })),
+                ...(academy.unknownStage > 0
+                  ? [{ key: 'unknown', label: <span className="text-text-muted">— етап ще невідомий</span>, value: academy.unknownStage }]
+                  : []),
+              ]}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <div className="text-[11px] uppercase tracking-wider text-text-muted mb-3">Рівень на старті</div>
+            <StackBar segments={[
+              { label: KMETA_ACADEMY_LEVEL_LABEL.new, value: academy.byLevel.new, color: TEAL },
+              { label: KMETA_ACADEMY_LEVEL_LABEL.some, value: academy.byLevel.some, color: '#5cb8ff' },
+              { label: KMETA_ACADEMY_LEVEL_LABEL.many, value: academy.byLevel.many, color: GOLD },
+              ...(academy.byLevel.unknown > 0 ? [{ label: 'Не вказано', value: academy.byLevel.unknown, color: '#3a5257' }] : []),
+            ]} />
+          </div>
+        </div>
+      </Panel>
     </div>
   );
 }
